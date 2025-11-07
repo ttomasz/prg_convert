@@ -23,7 +23,7 @@ use proj4rs::Proj;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
-pub const ADDRESS_TAG: &[u8] = b"prg-ad:PRG_PunktAdresowy";
+const ADDRESS_TAG: &[u8] = b"prg-ad:PRG_PunktAdresowy";
 // const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazwa";
 // const LOCALITY_TAG: &[u8] = b"prg-ad:PRG_MiejscowoscNazwa";
 // const STREET_TAG: &[u8] = b"prg-ad:PRG_UlicaNazwa";
@@ -240,24 +240,23 @@ impl AddressParser {
                         // if nested_tag is true, we are inside a nested tag that we want to skip (only read innermost text not the whole tree branch)
                         continue;
                     }
-                    let tag = std::str::from_utf8(&last_tag).unwrap();
                     let text_decoded = e.decode().unwrap();
                     let text_trimmed = text_decoded.trim();
-                    match tag {
-                        "gml:identifier" => { self.gml_identifier.append_value(text_trimmed); },
-                        "bt:lokalnyId" => { self.id.append_value(text_trimmed); },
-                        "bt:przestrzenNazw" => { self.id_namespace.append_value(text_trimmed); },
-                        "bt:wersjaId" => {
+                    match last_tag.as_slice() {
+                        b"gml:identifier" => { self.gml_identifier.append_value(text_trimmed); },
+                        b"bt:lokalnyId" => { self.id.append_value(text_trimmed); },
+                        b"bt:przestrzenNazw" => { self.id_namespace.append_value(text_trimmed); },
+                        b"bt:wersjaId" => {
                             let dt = DateTime::parse_from_rfc3339(&text_trimmed)
                                 .expect("Failed to parse datetime").to_utc();
                             self.version.append_value(dt.timestamp());
                         },
-                        "bt:poczatekWersjiObiektu" => {
+                        b"bt:poczatekWersjiObiektu" => {
                             let dt = DateTime::parse_from_rfc3339(&text_trimmed)
                                 .expect("Failed to parse datetime").to_utc();
                             self.lifecycle_start_date.append_value(dt.timestamp());
                         },
-                        "prg-ad:waznyOd" => {
+                        b"prg-ad:waznyOd" => {
                             if text_trimmed.is_empty() { self.valid_since_date.append_null(); }
                             else {
                                 let date = NaiveDate::parse_from_str(&text_trimmed, "%Y-%m-%d")
@@ -265,7 +264,7 @@ impl AddressParser {
                                 self.valid_since_date.append_value(date.signed_duration_since(EPOCH_DATE).num_days() as i32);
                             }
                         },
-                        "prg-ad:waznyDo" => {
+                        b"prg-ad:waznyDo" => {
                             if text_trimmed.is_empty() { self.valid_to_date.append_null(); }
                             else {
                                 let date = NaiveDate::parse_from_str(&text_trimmed, "%Y-%m-%d")
@@ -273,7 +272,7 @@ impl AddressParser {
                                 self.valid_to_date.append_value(date.signed_duration_since(EPOCH_DATE).num_days() as i32);
                             }
                         },
-                        "prg-ad:jednostkaAdmnistracyjna" => { // sic!
+                        b"prg-ad:jednostkaAdmnistracyjna" => { // sic!
                             match admin_unit_counter {
                                 0 => { self.administrative_unit_0.append_value(text_trimmed); },
                                 1 => { self.administrative_unit_1.append_value(text_trimmed); },
@@ -283,13 +282,13 @@ impl AddressParser {
                             }
                             admin_unit_counter += 1;
                         },
-                        "prg-ad:miejscowosc" => { self.city.append_value(text_trimmed); },
-                        "prg-ad:czescMiejscowosci" => { append_value_or_null(&mut self.city_part, &text_trimmed); },
-                        "prg-ad:ulica" => { append_value_or_null(&mut self.street, &text_trimmed); },
-                        "prg-ad:numerPorzadkowy" => { self.house_number.append_value(text_trimmed); },
-                        "prg-ad:kodPocztowy" => { append_value_or_null(&mut self.postcode, &text_trimmed); },
-                        "prg-ad:status" => { self.status.append_value(text_trimmed); },
-                        "gml:pos" => {
+                        b"prg-ad:miejscowosc" => { self.city.append_value(text_trimmed); },
+                        b"prg-ad:czescMiejscowosci" => { append_value_or_null(&mut self.city_part, &text_trimmed); },
+                        b"prg-ad:ulica" => { append_value_or_null(&mut self.street, &text_trimmed); },
+                        b"prg-ad:numerPorzadkowy" => { self.house_number.append_value(text_trimmed); },
+                        b"prg-ad:kodPocztowy" => { append_value_or_null(&mut self.postcode, &text_trimmed); },
+                        b"prg-ad:status" => { self.status.append_value(text_trimmed); },
+                        b"gml:pos" => {
                             let coords: Vec<&str> = text_trimmed.split_whitespace().collect();
                             if coords.len() == 2 {
                                 let x2180 = coords[0].parse::<f64>().unwrap_or(f64::NAN);
@@ -306,7 +305,7 @@ impl AddressParser {
                                 println!("Warning: could not parse coordinates in gml:pos: {}", text_trimmed);
                             }
                         },
-                        _ => { println!("Unknown tag {}", tag); }
+                        _ => { println!("Unknown tag {:?}", std::str::from_utf8(&last_tag)); }
                     }
                     last_tag.clear();
                 },
