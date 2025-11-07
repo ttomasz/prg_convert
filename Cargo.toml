@@ -1,0 +1,15 @@
+[package]
+name = "prg_convert"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+arrow = { version = "56.2.0", features = ["csv", "chrono-tz"] }
+chrono = { version = "0.4.42", default-features = false }
+clap = { version = "4.5.51", features = ["derive"] }
+geo-types = "0.7.17"
+geoarrow = "0.6.2"
+geoparquet = "0.6.2"
+proj4rs = { version = "0.1.9", features = ["crs-definitions"] }
+quick-xml = "0.38.3"
