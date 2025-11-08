@@ -45,7 +45,7 @@ fn main() -> Result<()> {
     }
     let input_file_size = input_file_metadata.len();
     let input_file_type = &args.input.extension().unwrap().to_string_lossy().to_uppercase();
-    println!("📁  Input file ({}) size: {:.2} MB", input_file_type, (input_file_size as f64 / 1024.0 / 1024.0));
+    println!("📁 Input file ({}) size: {:.2} MB", input_file_type, (input_file_size as f64 / 1024.0 / 1024.0));
     println!("----------------------------------------");
 
     let start_time = std::time::Instant::now();
@@ -55,7 +55,8 @@ fn main() -> Result<()> {
         csv_writer.write(&batch).expect("Failed to write CSV batch");
     });
     let duration = start_time.elapsed();
-    println!("📊  Total addresses read {}. Duration: {:#?}", total_count, duration);
+    println!("----------------------------------------");
+    println!("📊 Total addresses read {}. Duration: {:#?}", total_count, duration);
 
 Ok(())
 }
