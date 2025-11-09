@@ -6,7 +6,7 @@ use clap::Parser;
 use glob::glob;
 use quick_xml::reader::Reader;
 
-use prg_convert::AddressParser;
+use prg_convert::{AddressParser, build_dictionaries};
 
 const DEFAULT_BATCH_SIZE: usize = 100_000;
 
@@ -27,6 +27,13 @@ struct Cli {
     schema_version: String,
     #[arg(long = "batch-size", help = format!("How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE))]
     batch_size: Option<usize>,
+}
+
+fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
+    let mut reader = Reader::from_file(&path)
+        .with_context(|| format!("could not read XML from file `{}`", &path.display()))?;
+    reader.config_mut().expand_empty_elements = true;
+    return Ok(reader);
 }
 
 fn main() -> Result<()> {
@@ -81,16 +88,18 @@ fn main() -> Result<()> {
         }
         let input_file_size = input_file_metadata.len();
         total_size += &input_file_size;
-        let mut reader = Reader::from_file(&path)
-            .with_context(|| format!("could not read XML from file `{}`", &path.display()))?;
-        reader.config_mut().expand_empty_elements = true;
+        let mut reader = get_xml_reader(&path).unwrap();
         if counter == 1 {
             println!("⚙️  XML reader configuration: {:#?}", reader.config());
             println!("----------------------------------------");
         }
 
         println!("🪓 Processing file ({}/{}): `{}`, size: {:.2}MB.", &counter, &num_files_to_process, &path.display(), (input_file_size as f64 / 1024.0 / 1024.0));
-        AddressParser::new(reader, batch_size).for_each(|batch| {
+        println!("Building dictionaries...");
+        let dict = build_dictionaries(reader);
+        reader = get_xml_reader(&path).unwrap();
+        println!("Parsing data...");
+        AddressParser::new(reader, batch_size, dict).for_each(|batch| {
             total_count += batch.num_rows();
             println!("Read batch of {} addresses.", batch.num_rows());
             writer.write(&batch).expect("Failed to write CSV batch.");

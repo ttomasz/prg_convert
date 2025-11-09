@@ -1,5 +1,6 @@
 use core::f64;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow::array::ArrayBuilder;
@@ -24,9 +25,9 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 const ADDRESS_TAG: &[u8] = b"prg-ad:PRG_PunktAdresowy";
-// const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazwa";
-// const LOCALITY_TAG: &[u8] = b"prg-ad:PRG_MiejscowoscNazwa";
-// const STREET_TAG: &[u8] = b"prg-ad:PRG_UlicaNazwa";
+const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazwa";
+const CITY_TAG: &[u8] = b"prg-ad:PRG_MiejscowoscNazwa";
+const STREET_TAG: &[u8] = b"prg-ad:PRG_UlicaNazwa";
 const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 
 fn get_attribute<'a>(event_start: &'a quick_xml::events::BytesStart<'_>, attribute: &'a [u8]) -> Cow<'a, str> {
@@ -50,9 +51,131 @@ fn append_value_or_null(builder: &mut StringBuilder, value: &str) {
     }
 }
 
+pub enum KomponentType {
+    Country,
+    Voivodeship,
+    County,
+    Municipality,
+    City,
+    Street,
+}
+
+pub struct AdditionalInfo {
+    typ: KomponentType,
+    name: String,
+    teryt_id: Option<String>,
+}
+
+fn parse_additional_info(reader: &mut Reader<std::io::BufReader<std::fs::File>>, tag: &[u8]) -> AdditionalInfo {
+    let mut buffer = Vec::new();
+    let mut last_tag = Vec::new();
+    let mut typ: Option<KomponentType> = None;
+    let mut name: Option<String> = None;
+    let mut name_part_1 = String::new();
+    let mut name_part_2 = String::new();
+    let mut name_part_3 = String::new();
+    let mut name_part_4 = String::new();
+    let mut teryt_id: Option<String> = None;
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(Event::Start(ref e)) => {
+                last_tag = e.name().as_ref().to_vec();
+            },
+            Ok(Event::Text(e)) => {
+                if last_tag.is_empty() {
+                    // if last_tag is empty, we are not inside a tag and we don't want that text
+                    continue;
+                }
+                let text_decoded = e.decode().unwrap();
+                let text_trimmed = text_decoded.trim();
+                match last_tag.as_slice() {
+                    b"prg-ad:nazwa" => { 
+                        if tag != STREET_TAG { name = Some(text_trimmed.to_string()); }
+                    },
+                    b"mua:przedrostek1Czesc" => { name_part_1 = text_trimmed.to_string(); },
+                    b"mua:przedrostek2Czesc" => { name_part_2 = text_trimmed.to_string(); },
+                    b"mua:nazwaCzesc" => { name_part_3 = text_trimmed.to_string(); },
+                    b"mua:nazwaGlownaCzesc" => { name_part_4 = text_trimmed.to_string(); },
+                    b"prg-ad:idTERYT" => { 
+                        if !text_trimmed.is_empty() { teryt_id = Some(text_trimmed.to_string()); }
+                    },
+                    b"prg-ad:poziom" => {
+                        match text_trimmed {
+                            "1poziom" => { typ = Some(KomponentType::Country); },
+                            "2poziom" => { typ = Some(KomponentType::Voivodeship); },
+                            "3poziom" => { typ = Some(KomponentType::County); },
+                            "4poziom" => { typ = Some(KomponentType::Municipality); },
+                            _ => { panic!("Unexpected value of `prg-ad:poziom`: `{}`.", text_trimmed) },
+                        }
+                    },
+                    _ => (),
+                }
+                last_tag.clear();
+            },
+            Ok(Event::End(ref e)) if e.name().as_ref() == tag => {
+                match tag {
+                    CITY_TAG => { typ = Some(KomponentType::City); },
+                    STREET_TAG => {
+                        typ = Some(KomponentType::Street);
+                        ["a", "b"].join(" ");
+                        let name_parts = [name_part_1, name_part_2, name_part_3, name_part_4];
+                        let non_empty_parts: Vec<String> =
+                            name_parts
+                            .into_iter()
+                            .filter(|s| {!s.is_empty()})
+                            .collect();
+                        name = Some(non_empty_parts.join(" "));
+                    },
+                    _ => (),
+                }
+                break;
+            },
+            Ok(Event::Eof) => { panic!("Error: reached end of file before end of address entry"); },
+            Err(e) => { panic!("Error at position {}: {:?}", reader.error_position(), e); },
+            _ => (), // we do not care about other events here
+        }
+        buffer.clear();
+    }
+    return AdditionalInfo { typ: typ.unwrap(), name: name.unwrap(), teryt_id: teryt_id };
+}
+
+pub fn build_dictionaries(mut reader: Reader<std::io::BufReader<std::fs::File>>) -> HashMap::<String, AdditionalInfo> {
+    let mut dict = HashMap::<String, AdditionalInfo>::new();
+    let mut buffer = Vec::new();
+    // main loop that catches events when new object starts
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(Event::Start(ref e)) => match e.name().as_ref() {
+                ADMINISTRATIVE_UNIT_TAG => {
+                    let id = "http://geoportal.gov.pl/PZGIK/dane/".to_string() + &get_attribute(e, b"gml:id").to_string();
+                    let info = parse_additional_info(&mut reader, ADMINISTRATIVE_UNIT_TAG);
+                    dict.insert(id, info);
+                },
+                CITY_TAG => {
+                    let id = "http://geoportal.gov.pl/PZGIK/dane/".to_string() + &get_attribute(e, b"gml:id").to_string();
+                    let info = parse_additional_info(&mut reader, CITY_TAG);
+                    dict.insert(id, info);
+                },
+                STREET_TAG => {
+                    let id = "http://geoportal.gov.pl/PZGIK/dane/".to_string() + &get_attribute(e, b"gml:id").to_string();
+                    let info = parse_additional_info(&mut reader, STREET_TAG);
+                    dict.insert(id, info);
+                },
+                _ => (),
+            },
+            Ok(Event::Eof) => break, // exits the loop when reaching end of file
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            _ => (), // we do not care about other events here
+        }
+        buffer.clear();
+    }
+    return dict;
+}
+
 pub struct AddressParser {
     reader: Reader<std::io::BufReader<std::fs::File>>,
     batch_size: usize,
+    additional_info: HashMap<String, AdditionalInfo>,
     buffer: Vec<u8>,
     count: usize,
     gml_identifier: StringBuilder,
@@ -89,13 +212,14 @@ pub struct AddressParser {
 }
 
 impl AddressParser {
-    pub fn new(reader: Reader<std::io::BufReader<std::fs::File>>, batch_size: usize) -> Self {
+    pub fn new(reader: Reader<std::io::BufReader<std::fs::File>>, batch_size: usize, additional_info: HashMap<String, AdditionalInfo>) -> Self {
         // let crs = Crs::from_authority_code("EPSG:2180".to_string());
         // let metadata = Arc::new(Metadata::new(crs, None));
         // let geom_type = PointType::new(Dimension::XY, metadata).with_coord_type(CoordType::Separated);
         Self {
             reader: reader,
             batch_size: batch_size,
+            additional_info: additional_info,
             buffer: Vec::new(),
             count: 0,
             gml_identifier: StringBuilder::with_capacity(batch_size, 91 * batch_size),
@@ -360,7 +484,7 @@ impl Iterator for AddressParser {
     type Item = arrow::array::RecordBatch;
 
     fn next(&mut self) -> Option<Self::Item> {
-    // main loop that catches events when new object starts
+        // main loop that catches events when new object starts
         loop {
             match self.reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => match e.name().as_ref() {
