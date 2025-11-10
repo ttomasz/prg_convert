@@ -26,13 +26,25 @@ struct Cli {
         num_args = 1..,
     )]
     input_paths: Vec<String>,
-    #[arg(long = "output-path", help = "Output file path.")]
+    #[arg(
+        long = "output-path",
+        help = "Output file path.",
+    )]
     output_path: std::path::PathBuf,
-    #[arg(long = "output-format", help = "Output file format (one of: csv, geoparquet).")]
+    #[arg(
+        long = "output-format",
+        help = "Output file format (one of: csv, geoparquet).",
+    )]
     output_format: String,
-    #[arg(long = "schema-version", help = "Schema version (one of: 2012, 2021).")]
+    #[arg(
+        long = "schema-version",
+        help = "Schema version (one of: 2012, 2021).",
+    )]
     schema_version: String,
-    #[arg(long = "batch-size", help = format!("How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE))]
+    #[arg(
+        long = "batch-size",
+        help = format!("How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE),
+    )]
     batch_size: Option<usize>,
 }
 
