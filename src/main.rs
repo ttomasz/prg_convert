@@ -1,14 +1,21 @@
-use std::path::PathBuf;
+use std::{fs::File, path::PathBuf};
 
 use anyhow::{Context, Result};
 use arrow::csv::writer::WriterBuilder;
+use parquet::arrow::arrow_writer::ArrowWriter;
 use clap::Parser;
+use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use glob::glob;
 use quick_xml::reader::Reader;
 
-use prg_convert::{AddressParser, build_dictionaries};
+use prg_convert::{AddressParser, OutputFormat, build_dictionaries, SCHEMA_CSV, SCHEMA_GEOPARQUET};
 
 const DEFAULT_BATCH_SIZE: usize = 100_000;
+
+struct Writer {
+    csv: Option<arrow::csv::writer::Writer<File>>,
+    geoparquet: Option<parquet::arrow::arrow_writer::ArrowWriter<File>>,
+}
 
 #[derive(Parser)]
 struct Cli {
@@ -43,9 +50,14 @@ fn main() -> Result<()> {
     if &args.schema_version != "2012" && &args.schema_version != "2021" {
         anyhow::bail!("unsupported schema version `{}`, expected one of: 2012, 2021", &args.schema_version);
     }
-    if &args.output_format != "csv" && &args.output_format != "geoparquet" {
-        anyhow::bail!("unsupported format `{}`, expected one of: csv, geoparquet", &args.output_format);
+    if &args.schema_version == "2021" {
+        anyhow::bail!("Schema version 2021 is not implemented yet.")
     }
+    let (output_format, schema) = match args.output_format.to_lowercase().as_str() {
+        "csv" => { (OutputFormat::CSV, SCHEMA_CSV.clone()) },
+        "geoparquet" => { (OutputFormat::GeoParquet, SCHEMA_GEOPARQUET.clone()) },
+        _ => { anyhow::bail!("unsupported format `{}`, expected one of: csv, geoparquet", &args.output_format); }
+    };
     let mut counter = 1;
     let mut total_count = 0;
     let mut total_size = 0;
@@ -74,10 +86,21 @@ fn main() -> Result<()> {
 
     let output_file = std::fs::File::create(&args.output_path)
         .with_context(|| format!("could not create output file `{}`", &args.output_path.display()))?;
-    if &args.output_format == "geoparquet" {
-        anyhow::bail!("geoparquet format is not yet implemented");
-    }
-    let mut writer = WriterBuilder::new().with_header(true).build(output_file);
+    let (mut writer, mut gpq_encoder)  = match &output_format {
+        OutputFormat::CSV => {
+            (
+                Writer{ csv: Some(WriterBuilder::new().with_header(true).build(output_file)), geoparquet: None },
+                None,
+            )
+        },
+        OutputFormat::GeoParquet => {
+            let gpq_encoder = GeoParquetRecordBatchEncoder::try_new(&schema, &GeoParquetWriterOptions::default()).unwrap();
+            (
+                Writer{ csv: None, geoparquet: Some(ArrowWriter::try_new(output_file, gpq_encoder.target_schema(), None).unwrap()) },
+                Some(gpq_encoder),
+            )
+        }
+    };
 
     let num_files_to_process = &paths.len();
     for path in &paths {
@@ -99,12 +122,26 @@ fn main() -> Result<()> {
         let dict = build_dictionaries(reader);
         reader = get_xml_reader(&path).unwrap();
         println!("Parsing data...");
-        AddressParser::new(reader, batch_size, dict).for_each(|batch| {
+        AddressParser::new(reader, batch_size, dict, output_format.clone()).for_each(|batch| {
             total_count += batch.num_rows();
             println!("Read batch of {} addresses.", batch.num_rows());
-            writer.write(&batch).expect("Failed to write CSV batch.");
+            match &output_format {
+                OutputFormat::CSV => {
+                    writer.csv.as_mut().unwrap().write(&batch).expect("Failed to write batch.");
+                },
+                OutputFormat::GeoParquet => {
+                    let encoded_batch = gpq_encoder.as_mut().unwrap().encode_record_batch(&batch).unwrap();
+                    writer.geoparquet.as_mut().unwrap().write(&encoded_batch).unwrap();
+                },
+            }
         });
         counter += 1;
+    }
+    if matches!(output_format, OutputFormat::GeoParquet) {
+        let kv_metadata = gpq_encoder.unwrap().into_keyvalue().unwrap();
+        let parquet_writer = writer.geoparquet.as_mut().unwrap();
+        parquet_writer.append_key_value_metadata(kv_metadata);
+        parquet_writer.finish().expect("Failed to write geoparquet metadata.");
     }
     let duration = start_time.elapsed();
     println!("----------------------------------------");

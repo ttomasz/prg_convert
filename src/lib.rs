@@ -16,11 +16,13 @@ use arrow::datatypes::TimeUnit;
 use chrono::NaiveDate;
 use chrono::DateTime;
 use proj4rs::Proj;
-// use geoarrow::array::GeoArrowArray;
-// use geoarrow::datatypes::Crs;
-// use geoarrow::array::PointBuilder;
-// use geoarrow::datatypes::Metadata;
-// use geoarrow::datatypes::{CoordType, Dimension, PointType};
+use geoarrow::array::GeoArrowArray;
+use geoarrow::datatypes::Crs;
+use geoarrow::array::PointBuilder;
+use geoarrow::datatypes::Metadata;
+use geoarrow::datatypes::{CoordType, Dimension, PointType};
+use geo_types::{Point, point};
+use once_cell::sync::Lazy;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
@@ -29,6 +31,67 @@ const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazw
 const CITY_TAG: &[u8] = b"prg-ad:PRG_MiejscowoscNazwa";
 const STREET_TAG: &[u8] = b"prg-ad:PRG_UlicaNazwa";
 const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+
+pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
+    Arc::new(Schema::new(vec![
+        Field::new("przestrzen_nazw", DataType::Utf8, false),
+        Field::new("lokalny_id", DataType::Utf8, false),
+        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), false),
+        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), true),
+        Field::new("wazny_od", DataType::Date32, true),
+        Field::new("wazny_do", DataType::Date32, true),
+        Field::new("teryt_wojewodztwo", DataType::Utf8, true),
+        Field::new("wojewodztwo", DataType::Utf8, false),
+        Field::new("teryt_powiat", DataType::Utf8, true),
+        Field::new("powiat", DataType::Utf8, false),
+        Field::new("teryt_gmina", DataType::Utf8, true),
+        Field::new("gmina", DataType::Utf8, false),
+        Field::new("teryt_miejscowosc", DataType::Utf8, true),
+        Field::new("miejscowosc", DataType::Utf8, false),
+        Field::new("czesc_miejscowosci", DataType::Utf8, true),
+        Field::new("teryt_ulica", DataType::Utf8, true),
+        Field::new("ulica", DataType::Utf8, true),
+        Field::new("numer_porzadkowy", DataType::Utf8, false),
+        Field::new("kod_pocztowy", DataType::Utf8, true),
+        Field::new("status", DataType::Utf8, false),
+        Field::new("x_epsg_2180", DataType::Float64, true),
+        Field::new("y_epsg_2180", DataType::Float64, true),
+        Field::new("dlugosc_geograficzna", DataType::Float64, true),
+        Field::new("szerokosc_geograficzna", DataType::Float64, true),
+    ]))
+});
+static CRS_2180: Lazy<Crs> = Lazy::new(|| { Crs::from_authority_code("EPSG:2180".to_string()) });
+static GEOARROW_METADATA: Lazy<Arc<Metadata>> = Lazy::new(|| { Arc::new(Metadata::new(CRS_2180.clone(), None)) });
+static GEOM_TYPE: Lazy<PointType> = Lazy::new(|| { PointType::new(Dimension::XY, GEOARROW_METADATA.clone()).with_coord_type(CoordType::Separated) });
+pub static SCHEMA_GEOPARQUET: Lazy<Arc<Schema>> = Lazy::new(|| {
+    Arc::new(Schema::new(vec![
+        Field::new("przestrzen_nazw", DataType::Utf8, false),
+        Field::new("lokalny_id", DataType::Utf8, false),
+        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), false),
+        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), true),
+        Field::new("wazny_od", DataType::Date32, true),
+        Field::new("wazny_do", DataType::Date32, true),
+        Field::new("teryt_wojewodztwo", DataType::Utf8, true),
+        Field::new("wojewodztwo", DataType::Utf8, false),
+        Field::new("teryt_powiat", DataType::Utf8, true),
+        Field::new("powiat", DataType::Utf8, false),
+        Field::new("teryt_gmina", DataType::Utf8, true),
+        Field::new("gmina", DataType::Utf8, false),
+        Field::new("teryt_miejscowosc", DataType::Utf8, true),
+        Field::new("miejscowosc", DataType::Utf8, false),
+        Field::new("czesc_miejscowosci", DataType::Utf8, true),
+        Field::new("teryt_ulica", DataType::Utf8, true),
+        Field::new("ulica", DataType::Utf8, true),
+        Field::new("numer_porzadkowy", DataType::Utf8, false),
+        Field::new("kod_pocztowy", DataType::Utf8, true),
+        Field::new("status", DataType::Utf8, false),
+        Field::new("dlugosc_geograficzna", DataType::Float64, true),
+        Field::new("szerokosc_geograficzna", DataType::Float64, true),
+        GEOM_TYPE.to_field("geometry", true),
+    ]))
+});
+const EPSG_2180: Lazy<Proj> = Lazy::new(|| {Proj::from_epsg_code(2180).unwrap() });
+const EPSG_4326: Lazy<Proj> = Lazy::new(|| {Proj::from_epsg_code(4326).unwrap() });
 
 fn get_attribute<'a>(event_start: &'a quick_xml::events::BytesStart<'_>, attribute: &'a [u8]) -> Cow<'a, str> {
     event_start
@@ -40,7 +103,6 @@ fn get_attribute<'a>(event_start: &'a quick_xml::events::BytesStart<'_>, attribu
     .unwrap()
     .decode_and_unescape_value(event_start.decoder())
     .unwrap()
-    // .to_string()
 }
 
 fn str_append_value_or_null(builder: &mut StringBuilder, value: &str) {
@@ -57,6 +119,12 @@ fn option_append_value_or_null(builder: &mut StringBuilder, value: Option<String
     } else {
         builder.append_value(value.unwrap());
     }
+}
+
+#[derive(Clone)]
+pub enum OutputFormat {
+    CSV,
+    GeoParquet,
 }
 
 #[derive(Clone)]
@@ -121,6 +189,9 @@ fn parse_additional_info(reader: &mut Reader<std::io::BufReader<std::fs::File>>,
                     b"prg-ad:idTERYT" => { 
                         if !text_trimmed.is_empty() { teryt_id = Some(text_trimmed.to_string()); }
                     },
+                    b"mua:idTERYT" => { 
+                        if !text_trimmed.is_empty() { teryt_id = Some(text_trimmed.to_string()); }
+                    },
                     b"prg-ad:poziom" => {
                         match text_trimmed {
                             "1poziom" => { typ = Some(KomponentType::Country); },
@@ -139,7 +210,6 @@ fn parse_additional_info(reader: &mut Reader<std::io::BufReader<std::fs::File>>,
                     CITY_TAG => { typ = Some(KomponentType::City); },
                     STREET_TAG => {
                         typ = Some(KomponentType::Street);
-                        ["a", "b"].join(" ");
                         let name_parts = [name_part_1, name_part_2, name_part_3, name_part_4];
                         let non_empty_parts: Vec<String> =
                             name_parts
@@ -198,6 +268,7 @@ pub struct AddressParser {
     reader: Reader<std::io::BufReader<std::fs::File>>,
     batch_size: usize,
     additional_info: HashMap<String, AdditionalInfo>,
+    output_format: OutputFormat,
     count: usize,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
@@ -223,22 +294,16 @@ pub struct AddressParser {
     municipality_teryt_id: StringBuilder,
     city_teryt_id: StringBuilder,
     street_teryt_id: StringBuilder,
-    // geometry: PointBuilder,
-    schema: Arc<Schema>,
-    // geom_type: PointType,
-    epsg_2180: Proj,
-    epsg_4326: Proj,
+    geometry: Vec<Option<Point>>,
 }
 
 impl AddressParser {
-    pub fn new(reader: Reader<std::io::BufReader<std::fs::File>>, batch_size: usize, additional_info: HashMap<String, AdditionalInfo>) -> Self {
-        // let crs = Crs::from_authority_code("EPSG:2180".to_string());
-        // let metadata = Arc::new(Metadata::new(crs, None));
-        // let geom_type = PointType::new(Dimension::XY, metadata).with_coord_type(CoordType::Separated);
+    pub fn new(reader: Reader<std::io::BufReader<std::fs::File>>, batch_size: usize, additional_info: HashMap<String, AdditionalInfo>, output_format: OutputFormat) -> Self {
         Self {
             reader: reader,
             batch_size: batch_size,
             additional_info: additional_info,
+            output_format: output_format,
             count: 0,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
@@ -264,69 +329,73 @@ impl AddressParser {
             municipality_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
             city_teryt_id: StringBuilder::with_capacity(batch_size, 62 * batch_size),
             street_teryt_id: StringBuilder::with_capacity(batch_size, 91 * batch_size),
-            // geometry: PointBuilder::with_capacity(geom_type.clone(), batch_size),
-            schema: Arc::new(Schema::new(vec![
-                Field::new("przestrzen_nazw", DataType::Utf8, false),
-                Field::new("lokalny_id", DataType::Utf8, false),
-                Field::new("wersja_id", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), false),
-                Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), true),
-                Field::new("wazny_od", DataType::Date32, true),
-                Field::new("wazny_do", DataType::Date32, true),
-                Field::new("wojewodztwo", DataType::Utf8, false),
-                Field::new("powiat", DataType::Utf8, false),
-                Field::new("gmina", DataType::Utf8, false),
-                Field::new("miejscowosc", DataType::Utf8, false),
-                Field::new("czesc_miejscowosci", DataType::Utf8, true),
-                Field::new("ulica", DataType::Utf8, true),
-                Field::new("numer_porzadkowy", DataType::Utf8, false),
-                Field::new("kod_pocztowy", DataType::Utf8, true),
-                Field::new("status", DataType::Utf8, false),
-                Field::new("x_epsg_2180", DataType::Float64, true),
-                Field::new("y_epsg_2180", DataType::Float64, true),
-                Field::new("dlugosc_geograficzna", DataType::Float64, true),
-                Field::new("szerokosc_geograficzna", DataType::Float64, true),
-                Field::new("teryt_wojewodztwo", DataType::Utf8, true),
-                Field::new("teryt_powiat", DataType::Utf8, true),
-                Field::new("teryt_gmina", DataType::Utf8, true),
-                Field::new("teryt_miejscowosc", DataType::Utf8, true),
-                Field::new("teryt_ulica", DataType::Utf8, true),
-                // geom_type.to_field("geometry", true),
-            ])),
-            // geom_type: geom_type,
-            epsg_2180: Proj::from_epsg_code(2180).unwrap(),
-            epsg_4326: Proj::from_epsg_code(4326).unwrap(),
+            geometry: Vec::with_capacity(batch_size),
         }
     }
 
     fn build_record_batch(&mut self) -> RecordBatch {
-        // let geometry_array = self.geometry.finish();
-        RecordBatch::try_new(self.schema.clone(), vec![
-            Arc::new(self.id_namespace.finish()),
-            Arc::new(self.uuid.finish()),
-            Arc::new(self.version.finish()),
-            Arc::new(self.lifecycle_start_date.finish()),
-            Arc::new(self.valid_since_date.finish()),
-            Arc::new(self.valid_to_date.finish()),
-            Arc::new(self.voivodeship.finish()),
-            Arc::new(self.county.finish()),
-            Arc::new(self.municipality.finish()),
-            Arc::new(self.city.finish()),
-            Arc::new(self.city_part.finish()),
-            Arc::new(self.street.finish()),
-            Arc::new(self.house_number.finish()),
-            Arc::new(self.postcode.finish()),
-            Arc::new(self.status.finish()),
-            Arc::new(self.x_epsg_2180.finish()),
-            Arc::new(self.y_epsg_2180.finish()),
-            Arc::new(self.longitude.finish()),
-            Arc::new(self.latitude.finish()),
-            Arc::new(self.voivodeship_teryt_id.finish()),
-            Arc::new(self.county_teryt_id.finish()),
-            Arc::new(self.municipality_teryt_id.finish()),
-            Arc::new(self.city_teryt_id.finish()),
-            Arc::new(self.street_teryt_id.finish()),
-            // Arc::new(geometry_array.to_array_ref()),
-        ]).expect("Failed to create RecordBatch")
+        match self.output_format {
+            OutputFormat::CSV => {
+                return RecordBatch::try_new(SCHEMA_CSV.clone(), vec![
+                    Arc::new(self.id_namespace.finish()),
+                    Arc::new(self.uuid.finish()),
+                    Arc::new(self.version.finish()),
+                    Arc::new(self.lifecycle_start_date.finish()),
+                    Arc::new(self.valid_since_date.finish()),
+                    Arc::new(self.valid_to_date.finish()),
+                    Arc::new(self.voivodeship_teryt_id.finish()),
+                    Arc::new(self.voivodeship.finish()),
+                    Arc::new(self.county_teryt_id.finish()),
+                    Arc::new(self.county.finish()),
+                    Arc::new(self.municipality_teryt_id.finish()),
+                    Arc::new(self.municipality.finish()),
+                    Arc::new(self.city_teryt_id.finish()),
+                    Arc::new(self.city.finish()),
+                    Arc::new(self.city_part.finish()),
+                    Arc::new(self.street_teryt_id.finish()),
+                    Arc::new(self.street.finish()),
+                    Arc::new(self.house_number.finish()),
+                    Arc::new(self.postcode.finish()),
+                    Arc::new(self.status.finish()),
+                    Arc::new(self.x_epsg_2180.finish()),
+                    Arc::new(self.y_epsg_2180.finish()),
+                    Arc::new(self.longitude.finish()),
+                    Arc::new(self.latitude.finish()),
+                ]).expect("Failed to create RecordBatch");
+            },
+            OutputFormat::GeoParquet => {
+                let iter = self.geometry.iter().map(Option::as_ref);
+                let geometry_array = PointBuilder::from_nullable_points(iter, GEOM_TYPE.clone()).finish();
+                // reset geometry buffer before the next iteration
+                // arrow builders reset automatically on .finish() call
+                self.geometry = Vec::with_capacity(self.batch_size);
+                return RecordBatch::try_new(SCHEMA_GEOPARQUET.clone(), vec![
+                    Arc::new(self.id_namespace.finish()),
+                    Arc::new(self.uuid.finish()),
+                    Arc::new(self.version.finish()),
+                    Arc::new(self.lifecycle_start_date.finish()),
+                    Arc::new(self.valid_since_date.finish()),
+                    Arc::new(self.valid_to_date.finish()),
+                    Arc::new(self.voivodeship_teryt_id.finish()),
+                    Arc::new(self.voivodeship.finish()),
+                    Arc::new(self.county_teryt_id.finish()),
+                    Arc::new(self.county.finish()),
+                    Arc::new(self.municipality_teryt_id.finish()),
+                    Arc::new(self.municipality.finish()),
+                    Arc::new(self.city_teryt_id.finish()),
+                    Arc::new(self.city.finish()),
+                    Arc::new(self.city_part.finish()),
+                    Arc::new(self.street_teryt_id.finish()),
+                    Arc::new(self.street.finish()),
+                    Arc::new(self.house_number.finish()),
+                    Arc::new(self.postcode.finish()),
+                    Arc::new(self.status.finish()),
+                    Arc::new(self.longitude.finish()),
+                    Arc::new(self.latitude.finish()),
+                    Arc::new(geometry_array.to_array_ref()),
+                ]).expect("Failed to create RecordBatch");
+            }
+        }
     }
 
     fn parse_address(&mut self) {
@@ -429,23 +498,38 @@ impl AddressParser {
                             if coords.len() == 2 {
                                 let x2180 = coords[0].parse::<f64>().unwrap_or(f64::NAN);
                                 let y2180 = coords[1].parse::<f64>().unwrap_or(f64::NAN);
-                                let mut p = (x2180.clone(), y2180.clone());
-                                proj4rs::transform::transform(&self.epsg_2180, &self.epsg_4326, &mut p).expect("Failed to transform coordinates from EPSG:2180 to EPSG:4326");
-                                self.x_epsg_2180.append_value(x2180);
-                                self.y_epsg_2180.append_value(y2180);
-                                self.longitude.append_value(p.0.to_degrees());
-                                self.latitude.append_value(p.1.to_degrees());
-                                // self.geometry.push_coord(Some(Coord::from((x2180, y2180)).as_ref()));
+                                if x2180.is_nan() || y2180.is_nan(){
+                                    self.longitude.append_null();
+                                    self.latitude.append_null();
+                                    match self.output_format {
+                                        OutputFormat::CSV => {
+                                            self.x_epsg_2180.append_null();
+                                            self.y_epsg_2180.append_null();
+                                        },
+                                        OutputFormat::GeoParquet => {
+                                            self.geometry.push(None);
+                                        }
+                                    }
+                                } else {
+                                    let mut p = (x2180.clone(), y2180.clone());
+                                    proj4rs::transform::transform(&EPSG_2180, &EPSG_4326, &mut p).expect("Failed to transform coordinates from EPSG:2180 to EPSG:4326");
+                                    self.longitude.append_value(p.0.to_degrees());
+                                    self.latitude.append_value(p.1.to_degrees());
+                                    match self.output_format {
+                                        OutputFormat::CSV => {
+                                            self.x_epsg_2180.append_value(x2180);
+                                            self.y_epsg_2180.append_value(y2180);
+                                        },
+                                        OutputFormat::GeoParquet => {
+                                            self.geometry.push(Some(point!(x: x2180, y: y2180)));
+                                        },
+                                    }
+                                }
                             } else {
-                                self.x_epsg_2180.append_null();
-                                self.y_epsg_2180.append_null();
-                                self.longitude.append_null();
-                                self.latitude.append_null();
-                                // self.geometry.push_null();
-                                println!("Warning: could not parse coordinates in gml:pos: {}", text_trimmed);
+                                panic!("Warning: could not parse coordinates in gml:pos: `{}`.", text_trimmed);
                             }
                         },
-                        _ => { println!("Unknown tag {:?}", std::str::from_utf8(&last_tag)); }
+                        _ => { println!("Unknown tag `{:?}` for parse_address function.", std::str::from_utf8(&last_tag)); }
                     }
                     last_tag.clear();
                 },
@@ -466,8 +550,6 @@ impl AddressParser {
                     if self.house_number.len() < buffer_length { self.house_number.append_null(); }
                     if self.postcode.len() < buffer_length { self.postcode.append_null(); }
                     if self.status.len() < buffer_length { self.status.append_null(); }
-                    if self.x_epsg_2180.len() < buffer_length { self.x_epsg_2180.append_null(); }
-                    if self.y_epsg_2180.len() < buffer_length { self.y_epsg_2180.append_null(); }
                     if self.longitude.len() < buffer_length { self.longitude.append_null(); }
                     if self.latitude.len() < buffer_length { self.latitude.append_null(); }
                     if self.voivodeship_teryt_id.len() < buffer_length { self.voivodeship_teryt_id.append_null(); }
@@ -475,7 +557,15 @@ impl AddressParser {
                     if self.municipality_teryt_id.len() < buffer_length { self.municipality_teryt_id.append_null(); }
                     if self.city_teryt_id.len() < buffer_length { self.city_teryt_id.append_null(); }
                     if self.street_teryt_id.len() < buffer_length { self.street_teryt_id.append_null(); }
-                    // while self.geometry.len() < buffer_length { self.geometry.push_null(); }
+                    match self.output_format {
+                        OutputFormat::CSV => {
+                            if self.x_epsg_2180.len() < buffer_length { self.x_epsg_2180.append_null(); }
+                            if self.y_epsg_2180.len() < buffer_length { self.y_epsg_2180.append_null(); }
+                        },
+                        OutputFormat::GeoParquet => {
+                            if self.geometry.len() < buffer_length { self.geometry.push(None); }
+                        }
+                    }
                     // end of the current address entry
                     break;
                 },
@@ -508,7 +598,6 @@ impl Iterator for AddressParser {
                         self.parse_address();
                         if self.count == self.batch_size {
                             let record_batch = self.build_record_batch();
-                            // self.geometry = PointBuilder::with_capacity(self.geom_type.clone(), self.batch_size);
                             self.count = 0;
                             return Some(record_batch);
                         }
