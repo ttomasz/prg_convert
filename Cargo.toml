@@ -16,3 +16,4 @@ once_cell = "1.21.3"
 parquet = { version = "56.2.0", features = ["arrow", "zstd", "simdutf8"] }
 proj4rs = { version = "0.1.9", features = ["crs-definitions"] }
 quick-xml = "0.38.3"
+serde_json = "1.0.145"

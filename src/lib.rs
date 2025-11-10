@@ -60,7 +60,133 @@ pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
         Field::new("szerokosc_geograficzna", DataType::Float64, true),
     ]))
 });
-static CRS_2180: Lazy<Crs> = Lazy::new(|| { Crs::from_authority_code("EPSG:2180".to_string()) });
+static PROJJSON_EPSG_2180: Lazy<serde_json::Value> = Lazy::new(|| {serde_json::from_str(r#"
+    {
+    "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+    "type": "ProjectedCRS",
+    "name": "ETRF2000-PL / CS92",
+    "base_crs": {
+        "name": "ETRF2000-PL",
+        "datum": {
+        "type": "GeodeticReferenceFrame",
+        "name": "ETRF2000 Poland",
+        "ellipsoid": {
+            "name": "GRS 1980",
+            "semi_major_axis": 6378137,
+            "inverse_flattening": 298.257222101
+        }
+        },
+        "coordinate_system": {
+        "subtype": "ellipsoidal",
+        "axis": [
+            {
+            "name": "Geodetic latitude",
+            "abbreviation": "Lat",
+            "direction": "north",
+            "unit": "degree"
+            },
+            {
+            "name": "Geodetic longitude",
+            "abbreviation": "Lon",
+            "direction": "east",
+            "unit": "degree"
+            }
+        ]
+        },
+        "id": {
+        "authority": "EPSG",
+        "code": 9702
+        }
+    },
+    "conversion": {
+        "name": "Poland CS92",
+        "method": {
+        "name": "Transverse Mercator",
+        "id": {
+            "authority": "EPSG",
+            "code": 9807
+        }
+        },
+        "parameters": [
+        {
+            "name": "Latitude of natural origin",
+            "value": 0,
+            "unit": "degree",
+            "id": {
+            "authority": "EPSG",
+            "code": 8801
+            }
+        },
+        {
+            "name": "Longitude of natural origin",
+            "value": 19,
+            "unit": "degree",
+            "id": {
+            "authority": "EPSG",
+            "code": 8802
+            }
+        },
+        {
+            "name": "Scale factor at natural origin",
+            "value": 0.9993,
+            "unit": "unity",
+            "id": {
+            "authority": "EPSG",
+            "code": 8805
+            }
+        },
+        {
+            "name": "False easting",
+            "value": 500000,
+            "unit": "metre",
+            "id": {
+            "authority": "EPSG",
+            "code": 8806
+            }
+        },
+        {
+            "name": "False northing",
+            "value": -5300000,
+            "unit": "metre",
+            "id": {
+            "authority": "EPSG",
+            "code": 8807
+            }
+        }
+        ]
+    },
+    "coordinate_system": {
+        "subtype": "Cartesian",
+        "axis": [
+        {
+            "name": "Northing",
+            "abbreviation": "x",
+            "direction": "north",
+            "unit": "metre"
+        },
+        {
+            "name": "Easting",
+            "abbreviation": "y",
+            "direction": "east",
+            "unit": "metre"
+        }
+        ]
+    },
+    "scope": "Topographic mapping (medium and small scale).",
+    "area": "Poland - onshore and offshore.",
+    "bbox": {
+        "south_latitude": 49,
+        "west_longitude": 14.14,
+        "north_latitude": 55.93,
+        "east_longitude": 24.15
+    },
+    "id": {
+        "authority": "EPSG",
+        "code": 2180
+    }
+    }
+"#).unwrap()});
+static CRS_2180: Lazy<Crs> = Lazy::new(|| { Crs::from_projjson(PROJJSON_EPSG_2180.clone()) });
 static GEOARROW_METADATA: Lazy<Arc<Metadata>> = Lazy::new(|| { Arc::new(Metadata::new(CRS_2180.clone(), None)) });
 static GEOM_TYPE: Lazy<PointType> = Lazy::new(|| { PointType::new(Dimension::XY, GEOARROW_METADATA.clone()).with_coord_type(CoordType::Separated) });
 pub static SCHEMA_GEOPARQUET: Lazy<Arc<Schema>> = Lazy::new(|| {
