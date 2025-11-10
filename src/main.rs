@@ -159,5 +159,5 @@ fn main() -> Result<()> {
     println!("----------------------------------------");
     println!("📊 Total addresses read {}. Duration: {:#?}. Data size: {:.2}MB.", total_count, duration, (total_size as f64 / 1024.0 / 1024.0));
 
-Ok(())
+    Ok(())
 }
