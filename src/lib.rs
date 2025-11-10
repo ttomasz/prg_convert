@@ -622,8 +622,8 @@ impl AddressParser {
                         b"gml:pos" => {
                             let coords: Vec<&str> = text_trimmed.split_whitespace().collect();
                             if coords.len() == 2 {
-                                let x2180 = coords[0].parse::<f64>().unwrap_or(f64::NAN);
-                                let y2180 = coords[1].parse::<f64>().unwrap_or(f64::NAN);
+                                let y2180 = coords[0].parse::<f64>().unwrap_or(f64::NAN);
+                                let x2180 = coords[1].parse::<f64>().unwrap_or(f64::NAN);
                                 if x2180.is_nan() || y2180.is_nan(){
                                     self.longitude.append_null();
                                     self.latitude.append_null();
