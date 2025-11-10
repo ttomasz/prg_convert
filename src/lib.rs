@@ -70,6 +70,7 @@ pub enum KomponentType {
     Unknown,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct AdditionalInfo {
     typ: KomponentType,
