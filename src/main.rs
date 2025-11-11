@@ -2,7 +2,7 @@ use std::{fs::File, path::PathBuf};
 
 use anyhow::{Context, Result};
 use arrow::csv::writer::WriterBuilder;
-use parquet::arrow::arrow_writer::ArrowWriter;
+use parquet::{arrow::arrow_writer::ArrowWriter, basic::{Compression, ZstdLevel}, file::properties::{WriterProperties, WriterVersion}, schema::types::ColumnPath};
 use clap::Parser;
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use glob::glob;
@@ -106,9 +106,15 @@ fn main() -> Result<()> {
             )
         },
         OutputFormat::GeoParquet => {
+            let props = WriterProperties::builder()
+                .set_max_row_group_size(batch_size)
+                .set_writer_version(WriterVersion::PARQUET_2_0)
+                .set_compression(Compression::ZSTD(ZstdLevel::try_new(16).unwrap()))
+                .set_column_compression(ColumnPath::from("lokalny_id"), Compression::UNCOMPRESSED)
+                .build();
             let gpq_encoder = GeoParquetRecordBatchEncoder::try_new(&schema, &GeoParquetWriterOptions::default()).unwrap();
             (
-                Writer{ csv: None, geoparquet: Some(ArrowWriter::try_new(output_file, gpq_encoder.target_schema(), None).unwrap()) },
+                Writer{ csv: None, geoparquet: Some(ArrowWriter::try_new(output_file, gpq_encoder.target_schema(), Some(props)).unwrap()) },
                 Some(gpq_encoder),
             )
         }
