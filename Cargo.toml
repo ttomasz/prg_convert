@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 arrow = { version = "56.2.0", features = ["csv", "chrono-tz"] }
+arrow-schema = { version = "56.2.0", features = ["canonical_extension_types"] }
 chrono = { version = "0.4.42", default-features = false }
 clap = { version = "4.5.51", features = ["derive"] }
 geo-types = "0.7.17"

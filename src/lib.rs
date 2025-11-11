@@ -6,7 +6,7 @@ use std::sync::Arc;
 use arrow::array::ArrayBuilder;
 use arrow::array::Date32Builder;
 use arrow::array::RecordBatch;
-use arrow::array::TimestampSecondBuilder;
+use arrow::array::TimestampMillisecondBuilder;
 use arrow::array::Float64Builder;
 use arrow::array::StringBuilder;
 use arrow::datatypes::DataType;
@@ -35,9 +35,9 @@ const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("przestrzen_nazw", DataType::Utf8, false),
-        Field::new("lokalny_id", DataType::Utf8, false),
-        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), false),
-        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), true),
+        Field::new("lokalny_id", DataType::FixedSizeBinary(16), false).with_extension_type(arrow_schema::extension::Uuid),
+        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), false),
+        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), true),
         Field::new("wazny_od", DataType::Date32, true),
         Field::new("wazny_do", DataType::Date32, true),
         Field::new("teryt_wojewodztwo", DataType::Utf8, true),
@@ -193,8 +193,8 @@ pub static SCHEMA_GEOPARQUET: Lazy<Arc<Schema>> = Lazy::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("przestrzen_nazw", DataType::Utf8, false),
         Field::new("lokalny_id", DataType::Utf8, false),
-        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), false),
-        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Second, Some(Arc::from("UTC"))), true),
+        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), false),
+        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), true),
         Field::new("wazny_od", DataType::Date32, true),
         Field::new("wazny_do", DataType::Date32, true),
         Field::new("teryt_wojewodztwo", DataType::Utf8, true),
@@ -398,8 +398,8 @@ pub struct AddressParser {
     count: usize,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
-    version: TimestampSecondBuilder,
-    lifecycle_start_date: TimestampSecondBuilder,
+    version: TimestampMillisecondBuilder,
+    lifecycle_start_date: TimestampMillisecondBuilder,
     valid_since_date: Date32Builder,
     valid_to_date: Date32Builder,
     voivodeship: StringBuilder,
@@ -433,8 +433,8 @@ impl AddressParser {
             count: 0,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
-            version: TimestampSecondBuilder::with_capacity(batch_size).with_timezone(Arc::from("UTC")),
-            lifecycle_start_date: TimestampSecondBuilder::with_capacity(batch_size).with_timezone(Arc::from("UTC")),
+            version: TimestampMillisecondBuilder::with_capacity(batch_size).with_timezone(Arc::from("UTC")),
+            lifecycle_start_date: TimestampMillisecondBuilder::with_capacity(batch_size).with_timezone(Arc::from("UTC")),
             valid_since_date: Date32Builder::with_capacity(batch_size),
             valid_to_date: Date32Builder::with_capacity(batch_size),
             voivodeship: StringBuilder::with_capacity(batch_size, 12 * batch_size),
@@ -577,14 +577,14 @@ impl AddressParser {
                         b"bt:wersjaId" => {
                             let dt = DateTime::parse_from_rfc3339(&text_trimmed)
                                 .expect("Failed to parse datetime").to_utc();
-                            self.version.append_value(dt.timestamp());
+                            self.version.append_value(dt.timestamp() * 1000);
                         },
                         b"bt:poczatekWersjiObiektu" => {
                             if text_trimmed.is_empty() { self.lifecycle_start_date.append_null(); }
                             else {
                                 let dt = DateTime::parse_from_rfc3339(&text_trimmed)
                                     .expect("Failed to parse datetime").to_utc();
-                                self.lifecycle_start_date.append_value(dt.timestamp());
+                                self.lifecycle_start_date.append_value(dt.timestamp() * 1000);
                             }
                         },
                         b"prg-ad:waznyOd" => {

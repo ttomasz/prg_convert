@@ -297,6 +297,10 @@ name = "arrow-schema"
 version = "56.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3aa9e59c611ebc291c28582077ef25c97f1975383f1479b12f3b9ffee2ffabe"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "arrow-select"
@@ -1200,6 +1204,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow",
+ "arrow-schema",
  "chrono",
  "clap",
  "geo-types",
