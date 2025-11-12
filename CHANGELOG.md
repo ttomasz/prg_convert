@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.3.0] - 2025-11-12
+
+### Fixed
+
+- fixed trying to write lokalny_id as UUID type, there was a bug in the code which caused a crash when writing CSV, but even after fixing it it turned out it's not well supported by clients so we'll use regular strings
+
+### Changed
+
+- changed default zstd compression level from 16 to 11
+- field lokalny_id will be included in compression (previously it was always uncompressed)
+
+### Added
+
+- added more cli options for geoparquet output format settings like compression type, level, etc
+
 ## [v0.2.0] - 2025-11-11
 
 ### Added
