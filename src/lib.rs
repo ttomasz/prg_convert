@@ -35,7 +35,7 @@ const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("przestrzen_nazw", DataType::Utf8, false),
-        Field::new("lokalny_id", DataType::FixedSizeBinary(16), false).with_extension_type(arrow_schema::extension::Uuid),
+        Field::new("lokalny_id", DataType::Utf8, false),
         Field::new("wersja_id", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), false),
         Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), true),
         Field::new("wazny_od", DataType::Date32, true),
