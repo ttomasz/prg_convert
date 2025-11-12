@@ -2,7 +2,7 @@ use std::{fs::File, path::PathBuf};
 
 use anyhow::{Context, Result};
 use arrow::csv::writer::WriterBuilder;
-use parquet::{arrow::arrow_writer::ArrowWriter, basic::{BrotliLevel, Compression, ZstdLevel}, file::properties::{WriterProperties, WriterVersion}, schema::types::ColumnPath};
+use parquet::{arrow::arrow_writer::ArrowWriter, basic::{BrotliLevel, Compression, ZstdLevel}, file::properties::{WriterProperties, WriterVersion}};
 use clap::Parser;
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use glob::glob;
@@ -161,7 +161,6 @@ fn main() -> Result<()> {
                 .set_max_row_group_size(parquet_row_group_size)
                 .set_writer_version(parquet_version)
                 .set_compression(parquet_compression)
-                .set_column_compression(ColumnPath::from("lokalny_id"), Compression::UNCOMPRESSED)
                 .build();
             let gpq_encoder = GeoParquetRecordBatchEncoder::try_new(&schema, &GeoParquetWriterOptions::default()).unwrap();
             (
