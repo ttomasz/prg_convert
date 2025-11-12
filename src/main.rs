@@ -2,7 +2,7 @@ use std::{fs::File, path::PathBuf};
 
 use anyhow::{Context, Result};
 use arrow::csv::writer::WriterBuilder;
-use parquet::{arrow::arrow_writer::ArrowWriter, basic::{Compression, ZstdLevel}, file::properties::{WriterProperties, WriterVersion}, schema::types::ColumnPath};
+use parquet::{arrow::arrow_writer::ArrowWriter, basic::{BrotliLevel, Compression, ZstdLevel}, file::properties::{WriterProperties, WriterVersion}, schema::types::ColumnPath};
 use clap::Parser;
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use glob::glob;
@@ -43,9 +43,29 @@ struct Cli {
     schema_version: String,
     #[arg(
         long = "batch-size",
-        help = format!("How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE),
+        help = format!("(Optional) How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE),
     )]
     batch_size: Option<usize>,
+    #[arg(
+        long = "parquet-compression",
+        help = "(Optional) What type of compression to use when writing parquet file (one of: zstd, snappy,) (default: zstd).",
+    )]
+    parquet_compression: Option<String>,
+    #[arg(
+        long = "compression-level",
+        help = "(Optional) What level of compression to use when writing parquet file (if compression algorithm supports it).",
+    )]
+    compression_level: Option<i32>,
+    #[arg(
+        long = "parquet-row-group-size",
+        help = "(Optional) What's the max row group size when writing parquet file (default: same as batch-size).",
+    )]
+    parquet_row_group_size: Option<usize>,
+    #[arg(
+        long = "parquet-version",
+        help = "(Optional) Version of parquet standard to use (one of: v1, v2,) (default: v2).",
+    )]
+    parquet_version: Option<String>,
 }
 
 fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
@@ -69,6 +89,23 @@ fn main() -> Result<()> {
         "csv" => { (OutputFormat::CSV, SCHEMA_CSV.clone()) },
         "geoparquet" => { (OutputFormat::GeoParquet, SCHEMA_GEOPARQUET.clone()) },
         _ => { anyhow::bail!("unsupported format `{}`, expected one of: csv, geoparquet", &args.output_format); }
+    };
+    let compression_level = match &args.parquet_compression.as_deref() {
+        None | Some("zstd") => { Some(args.compression_level.unwrap_or(11)) },
+        Some("brotli") => { Some(args.compression_level.unwrap_or(6)) },
+        _ => { None },
+    };
+    let parquet_compression = match &args.parquet_compression.as_deref() {
+        None | Some("zstd") => { Compression::ZSTD(ZstdLevel::try_new(compression_level.unwrap()).unwrap()) },
+        Some("snappy") => { Compression::SNAPPY },
+        Some("brotli") => { Compression::BROTLI(BrotliLevel::try_new(compression_level.unwrap().cast_unsigned()).unwrap()) },
+        _ => {anyhow::bail!("Unexpected compression type for parquet writer: `{:?}`", &args.parquet_compression)},
+    };
+    let parquet_row_group_size = args.parquet_row_group_size.unwrap_or(batch_size);
+    let parquet_version = match &args.parquet_version.as_deref() {
+        None | Some("v2") => { WriterVersion::PARQUET_2_0 },
+        Some("v1") => { WriterVersion::PARQUET_1_0 },
+        _ => { anyhow::bail!("Unexpected version for parquet writer: `{:?}`", &args.parquet_version) }
     };
     let mut counter = 1;
     let mut total_count = 0;
@@ -94,6 +131,20 @@ fn main() -> Result<()> {
     println!("  Output file format: {}", args.output_format);
     println!("  Schema version: {}", args.schema_version);
     println!("  Batch size: {}", batch_size);
+    match output_format  {
+        OutputFormat::GeoParquet => {
+            println!("  Parquet compression: {}", parquet_compression);
+            if compression_level.is_some() {
+                println!("  Compression level: {}", compression_level.unwrap());
+            }
+            println!("  Parquet max row group size: {}", parquet_row_group_size);
+            match parquet_version {
+                WriterVersion::PARQUET_1_0 => { println!("  Parquet file format version: v1") },
+                WriterVersion::PARQUET_2_0 => { println!("  Parquet file format version: v2") },
+            };
+        },
+        _ => {},
+    };
     println!("----------------------------------------");
 
     let output_file = std::fs::File::create(&args.output_path)
@@ -107,9 +158,9 @@ fn main() -> Result<()> {
         },
         OutputFormat::GeoParquet => {
             let props = WriterProperties::builder()
-                .set_max_row_group_size(batch_size)
-                .set_writer_version(WriterVersion::PARQUET_2_0)
-                .set_compression(Compression::ZSTD(ZstdLevel::try_new(16).unwrap()))
+                .set_max_row_group_size(parquet_row_group_size)
+                .set_writer_version(parquet_version)
+                .set_compression(parquet_compression)
                 .set_column_compression(ColumnPath::from("lokalny_id"), Compression::UNCOMPRESSED)
                 .build();
             let gpq_encoder = GeoParquetRecordBatchEncoder::try_new(&schema, &GeoParquetWriterOptions::default()).unwrap();
