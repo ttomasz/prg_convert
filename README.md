@@ -11,6 +11,7 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 - ✅ Zapis do GeoParquet
 - Odczyt bezpośrednio z pliku ZIP
 - Pasek stanu postępu
+- Optymalizacja ustawień formatu parquet (encodings, bloom filters, etc)
 - Wielowątkowość
 
 ## Obsługa
