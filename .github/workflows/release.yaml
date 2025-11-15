@@ -9,6 +9,16 @@ on:
     - v[0-9]+.*
 
 jobs:
+  run-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - run: rustup update stable && rustup default stable && rustup component add clippy rustfmt
+    - run: cargo build --all-features
+    - run: cargo test --all-features
+    # - run: cargo clippy --all-targets --all-features -- -D warnings
+    - run: cargo fmt --all --check
+
   create-release:
     runs-on: ubuntu-latest
     steps:

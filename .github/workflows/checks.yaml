@@ -1,0 +1,25 @@
+name: Cargo Build & Test
+
+on:
+  push:
+    paths:
+    - "src/**"
+    - ".github/workflows/checks.yaml"
+    tags-ignore:
+    - "*"
+  pull_request:
+
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  run-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - run: rustup update stable && rustup default stable && rustup component add clippy rustfmt
+    - run: cargo build --all-features
+    - run: cargo test --all-features
+    # - run: cargo clippy --all-targets --all-features -- -D warnings
+    - run: cargo fmt --all --check
