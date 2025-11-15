@@ -6,10 +6,10 @@ use arrow::array::Float64Builder;
 use arrow::array::StringBuilder;
 
 mod constants;
-pub use constants::SCHEMA_CSV;
-pub use constants::SCHEMA_GEOPARQUET;
 use constants::EPSG_2180;
 use constants::EPSG_4326;
+pub use constants::SCHEMA_CSV;
+pub use constants::SCHEMA_GEOPARQUET;
 mod model2012;
 use model2012::AddressParser;
 use model2012::build_dictionaries;
@@ -46,7 +46,15 @@ fn option_append_value_or_null(builder: &mut StringBuilder, value: Option<String
     }
 }
 
-fn parse_gml_pos(text_trimmed: &str, longitude: &mut Float64Builder, latitude: &mut Float64Builder, x_epsg_2180: &mut Float64Builder, y_epsg_2180: &mut Float64Builder, geometry: &mut Vec<Option<geo_types::Point>>, output_format: &OutputFormat) {
+fn parse_gml_pos(
+    text_trimmed: &str,
+    longitude: &mut Float64Builder,
+    latitude: &mut Float64Builder,
+    x_epsg_2180: &mut Float64Builder,
+    y_epsg_2180: &mut Float64Builder,
+    geometry: &mut Vec<Option<geo_types::Point>>,
+    output_format: &OutputFormat,
+) {
     let coords: Vec<&str> = text_trimmed.split_whitespace().collect();
     if coords.len() == 2 {
         let y2180 = coords[0].parse::<f64>().unwrap_or(f64::NAN);
@@ -65,7 +73,8 @@ fn parse_gml_pos(text_trimmed: &str, longitude: &mut Float64Builder, latitude: &
             }
         } else {
             let mut p = (x2180.clone(), y2180.clone());
-            proj4rs::transform::transform(&EPSG_2180, &EPSG_4326, &mut p).expect("Failed to transform coordinates from EPSG:2180 to EPSG:4326");
+            proj4rs::transform::transform(&EPSG_2180, &EPSG_4326, &mut p)
+                .expect("Failed to transform coordinates from EPSG:2180 to EPSG:4326");
             longitude.append_value(p.0.to_degrees());
             latitude.append_value(p.1.to_degrees());
             match output_format {

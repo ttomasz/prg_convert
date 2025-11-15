@@ -9,7 +9,7 @@ use arrow::array::StringBuilder;
 use arrow::array::TimestampMillisecondBuilder;
 use chrono::DateTime;
 use chrono::NaiveDate;
-use geo_types::{Point};
+use geo_types::Point;
 use geoarrow::array::GeoArrowArray;
 use geoarrow::array::PointBuilder;
 use quick_xml::Reader;
@@ -538,7 +538,15 @@ impl AddressParser {
                             self.status.append_value(text_trimmed);
                         }
                         b"gml:pos" => {
-                            parse_gml_pos(text_trimmed, &mut self.longitude, &mut self.latitude, &mut self.x_epsg_2180, &mut self.y_epsg_2180, &mut self.geometry, &mut self.output_format);
+                            parse_gml_pos(
+                                text_trimmed,
+                                &mut self.longitude,
+                                &mut self.latitude,
+                                &mut self.x_epsg_2180,
+                                &mut self.y_epsg_2180,
+                                &mut self.geometry,
+                                &mut self.output_format,
+                            );
                         }
                         _ => {
                             println!(
