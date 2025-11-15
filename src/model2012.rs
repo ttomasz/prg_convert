@@ -61,6 +61,17 @@ impl Default for AdditionalInfo {
     }
 }
 
+/// Concatenates parts of the street name.
+pub fn construct_full_name_from_parts(name_part_1: String, name_part_2: String, name_part_3: String, name_part_4: String) -> String {
+    let name_parts = [name_part_1, name_part_2, name_part_3, name_part_4];
+    let non_empty_parts: Vec<String> =
+        name_parts
+        .into_iter()
+        .filter(|s| {!s.is_empty()})
+        .collect();
+    non_empty_parts.join(" ")
+}
+
 fn parse_additional_info(reader: &mut Reader<std::io::BufReader<std::fs::File>>, tag: &[u8]) -> AdditionalInfo {
     let mut buffer = Vec::new();
     let mut last_tag = Vec::new();
@@ -115,13 +126,7 @@ fn parse_additional_info(reader: &mut Reader<std::io::BufReader<std::fs::File>>,
                     CITY_TAG => { typ = Some(KomponentType::City); },
                     STREET_TAG => {
                         typ = Some(KomponentType::Street);
-                        let name_parts = [name_part_1, name_part_2, name_part_3, name_part_4];
-                        let non_empty_parts: Vec<String> =
-                            name_parts
-                            .into_iter()
-                            .filter(|s| {!s.is_empty()})
-                            .collect();
-                        name = Some(non_empty_parts.join(" "));
+                        name = Some(construct_full_name_from_parts(name_part_1, name_part_2, name_part_3, name_part_4));
                     },
                     _ => (),
                 }
@@ -522,4 +527,48 @@ impl Iterator for AddressParser {
             return None;
         }
     }
+}
+
+#[test]
+fn name_from_part1() {
+    let name_part_1 = "Test".to_string();
+    let name_part_2 = String::new();
+    let name_part_3 = String::new();
+    let name_part_4 = String::new();
+    let expected_name = "Test".to_string();
+    let name = construct_full_name_from_parts(name_part_1, name_part_2, name_part_3, name_part_4);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
+fn name_from_part1_part2() {
+    let name_part_1 = "Test".to_string();
+    let name_part_2 = "Test2".to_string();
+    let name_part_3 = String::new();
+    let name_part_4 = String::new();
+    let expected_name = "Test Test2".to_string();
+    let name = construct_full_name_from_parts(name_part_1, name_part_2, name_part_3, name_part_4);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
+fn name_from_part1_part2_part3() {
+    let name_part_1 = "Test".to_string();
+    let name_part_2 = "Test2".to_string();
+    let name_part_3 = "Test3".to_string();
+    let name_part_4 = String::new();
+    let expected_name = "Test Test2 Test3".to_string();
+    let name = construct_full_name_from_parts(name_part_1, name_part_2, name_part_3, name_part_4);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
+fn name_from_part1_part2_part3_part4() {
+    let name_part_1 = "Test".to_string();
+    let name_part_2 = "Test2".to_string();
+    let name_part_3 = "Test3".to_string();
+    let name_part_4 = "Test4".to_string();
+    let expected_name = "Test Test2 Test3 Test4".to_string();
+    let name = construct_full_name_from_parts(name_part_1, name_part_2, name_part_3, name_part_4);
+    assert_eq!(name, expected_name);
 }
