@@ -1,4 +1,3 @@
-use core::f64;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -10,7 +9,7 @@ use arrow::array::StringBuilder;
 use arrow::array::TimestampMillisecondBuilder;
 use chrono::DateTime;
 use chrono::NaiveDate;
-use geo_types::{Point, point};
+use geo_types::{Point};
 use geoarrow::array::GeoArrowArray;
 use geoarrow::array::PointBuilder;
 use quick_xml::Reader;
@@ -18,13 +17,12 @@ use quick_xml::events::Event;
 
 use crate::OutputFormat;
 use crate::constants::EPOCH_DATE;
-use crate::constants::EPSG_2180;
-use crate::constants::EPSG_4326;
 use crate::constants::GEOM_TYPE;
 use crate::constants::SCHEMA_CSV;
 use crate::constants::SCHEMA_GEOPARQUET;
 use crate::get_attribute;
 use crate::option_append_value_or_null;
+use crate::parse_gml_pos;
 use crate::str_append_value_or_null;
 
 const ADDRESS_TAG: &[u8] = b"prg-ad:PRG_PunktAdresowy";
@@ -540,43 +538,7 @@ impl AddressParser {
                             self.status.append_value(text_trimmed);
                         }
                         b"gml:pos" => {
-                            let coords: Vec<&str> = text_trimmed.split_whitespace().collect();
-                            if coords.len() == 2 {
-                                let y2180 = coords[0].parse::<f64>().unwrap_or(f64::NAN);
-                                let x2180 = coords[1].parse::<f64>().unwrap_or(f64::NAN);
-                                if x2180.is_nan() || y2180.is_nan() {
-                                    self.longitude.append_null();
-                                    self.latitude.append_null();
-                                    match self.output_format {
-                                        OutputFormat::CSV => {
-                                            self.x_epsg_2180.append_null();
-                                            self.y_epsg_2180.append_null();
-                                        }
-                                        OutputFormat::GeoParquet => {
-                                            self.geometry.push(None);
-                                        }
-                                    }
-                                } else {
-                                    let mut p = (x2180.clone(), y2180.clone());
-                                    proj4rs::transform::transform(&EPSG_2180, &EPSG_4326, &mut p).expect("Failed to transform coordinates from EPSG:2180 to EPSG:4326");
-                                    self.longitude.append_value(p.0.to_degrees());
-                                    self.latitude.append_value(p.1.to_degrees());
-                                    match self.output_format {
-                                        OutputFormat::CSV => {
-                                            self.x_epsg_2180.append_value(x2180);
-                                            self.y_epsg_2180.append_value(y2180);
-                                        }
-                                        OutputFormat::GeoParquet => {
-                                            self.geometry.push(Some(point!(x: x2180, y: y2180)));
-                                        }
-                                    }
-                                }
-                            } else {
-                                panic!(
-                                    "Warning: could not parse coordinates in gml:pos: `{}`.",
-                                    text_trimmed
-                                );
-                            }
+                            parse_gml_pos(text_trimmed, &mut self.longitude, &mut self.latitude, &mut self.x_epsg_2180, &mut self.y_epsg_2180, &mut self.geometry, &mut self.output_format);
                         }
                         _ => {
                             println!(
