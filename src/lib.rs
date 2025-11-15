@@ -1,235 +1,17 @@
 use std::borrow::Cow;
-use std::sync::Arc;
+use std::path::PathBuf;
 
+use anyhow::{Context, Result};
 use arrow::array::StringBuilder;
-use arrow::datatypes::DataType;
-use arrow::datatypes::Field;
-use arrow::datatypes::Schema;
-use arrow::datatypes::TimeUnit;
-use chrono::NaiveDate;
-use geoarrow::datatypes::Crs;
-use geoarrow::datatypes::Metadata;
-use geoarrow::datatypes::{CoordType, Dimension, PointType};
-use once_cell::sync::Lazy;
-use proj4rs::Proj;
 
+mod constants;
+pub use constants::SCHEMA_CSV;
+pub use constants::SCHEMA_GEOPARQUET;
 mod model2012;
-pub use model2012::AddressParser;
-pub use model2012::build_dictionaries;
+use model2012::AddressParser;
+use model2012::build_dictionaries;
+use quick_xml::Reader;
 mod model2021;
-
-const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-
-pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
-    Arc::new(Schema::new(vec![
-        Field::new("przestrzen_nazw", DataType::Utf8, false),
-        Field::new("lokalny_id", DataType::Utf8, false),
-        Field::new(
-            "wersja_id",
-            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
-            false,
-        ),
-        Field::new(
-            "poczatek_wersji_obiektu",
-            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
-            true,
-        ),
-        Field::new("wazny_od", DataType::Date32, true),
-        Field::new("wazny_do", DataType::Date32, true),
-        Field::new("teryt_wojewodztwo", DataType::Utf8, true),
-        Field::new("wojewodztwo", DataType::Utf8, false),
-        Field::new("teryt_powiat", DataType::Utf8, true),
-        Field::new("powiat", DataType::Utf8, false),
-        Field::new("teryt_gmina", DataType::Utf8, true),
-        Field::new("gmina", DataType::Utf8, false),
-        Field::new("teryt_miejscowosc", DataType::Utf8, true),
-        Field::new("miejscowosc", DataType::Utf8, false),
-        Field::new("czesc_miejscowosci", DataType::Utf8, true),
-        Field::new("teryt_ulica", DataType::Utf8, true),
-        Field::new("ulica", DataType::Utf8, true),
-        Field::new("numer_porzadkowy", DataType::Utf8, false),
-        Field::new("kod_pocztowy", DataType::Utf8, true),
-        Field::new("status", DataType::Utf8, false),
-        Field::new("x_epsg_2180", DataType::Float64, true),
-        Field::new("y_epsg_2180", DataType::Float64, true),
-        Field::new("dlugosc_geograficzna", DataType::Float64, true),
-        Field::new("szerokosc_geograficzna", DataType::Float64, true),
-    ]))
-});
-static PROJJSON_EPSG_2180: Lazy<serde_json::Value> = Lazy::new(|| {
-    serde_json::from_str(
-        r#"
-    {
-    "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
-    "type": "ProjectedCRS",
-    "name": "ETRF2000-PL / CS92",
-    "base_crs": {
-        "name": "ETRF2000-PL",
-        "datum": {
-        "type": "GeodeticReferenceFrame",
-        "name": "ETRF2000 Poland",
-        "ellipsoid": {
-            "name": "GRS 1980",
-            "semi_major_axis": 6378137,
-            "inverse_flattening": 298.257222101
-        }
-        },
-        "coordinate_system": {
-        "subtype": "ellipsoidal",
-        "axis": [
-            {
-            "name": "Geodetic latitude",
-            "abbreviation": "Lat",
-            "direction": "north",
-            "unit": "degree"
-            },
-            {
-            "name": "Geodetic longitude",
-            "abbreviation": "Lon",
-            "direction": "east",
-            "unit": "degree"
-            }
-        ]
-        },
-        "id": {
-        "authority": "EPSG",
-        "code": 9702
-        }
-    },
-    "conversion": {
-        "name": "Poland CS92",
-        "method": {
-        "name": "Transverse Mercator",
-        "id": {
-            "authority": "EPSG",
-            "code": 9807
-        }
-        },
-        "parameters": [
-        {
-            "name": "Latitude of natural origin",
-            "value": 0,
-            "unit": "degree",
-            "id": {
-            "authority": "EPSG",
-            "code": 8801
-            }
-        },
-        {
-            "name": "Longitude of natural origin",
-            "value": 19,
-            "unit": "degree",
-            "id": {
-            "authority": "EPSG",
-            "code": 8802
-            }
-        },
-        {
-            "name": "Scale factor at natural origin",
-            "value": 0.9993,
-            "unit": "unity",
-            "id": {
-            "authority": "EPSG",
-            "code": 8805
-            }
-        },
-        {
-            "name": "False easting",
-            "value": 500000,
-            "unit": "metre",
-            "id": {
-            "authority": "EPSG",
-            "code": 8806
-            }
-        },
-        {
-            "name": "False northing",
-            "value": -5300000,
-            "unit": "metre",
-            "id": {
-            "authority": "EPSG",
-            "code": 8807
-            }
-        }
-        ]
-    },
-    "coordinate_system": {
-        "subtype": "Cartesian",
-        "axis": [
-        {
-            "name": "Northing",
-            "abbreviation": "x",
-            "direction": "north",
-            "unit": "metre"
-        },
-        {
-            "name": "Easting",
-            "abbreviation": "y",
-            "direction": "east",
-            "unit": "metre"
-        }
-        ]
-    },
-    "scope": "Topographic mapping (medium and small scale).",
-    "area": "Poland - onshore and offshore.",
-    "bbox": {
-        "south_latitude": 49,
-        "west_longitude": 14.14,
-        "north_latitude": 55.93,
-        "east_longitude": 24.15
-    },
-    "id": {
-        "authority": "EPSG",
-        "code": 2180
-    }
-    }
-"#,
-    )
-    .unwrap()
-});
-static CRS_2180: Lazy<Crs> = Lazy::new(|| Crs::from_projjson(PROJJSON_EPSG_2180.clone()));
-static GEOARROW_METADATA: Lazy<Arc<Metadata>> =
-    Lazy::new(|| Arc::new(Metadata::new(CRS_2180.clone(), None)));
-static GEOM_TYPE: Lazy<PointType> = Lazy::new(|| {
-    PointType::new(Dimension::XY, GEOARROW_METADATA.clone()).with_coord_type(CoordType::Separated)
-});
-pub static SCHEMA_GEOPARQUET: Lazy<Arc<Schema>> = Lazy::new(|| {
-    Arc::new(Schema::new(vec![
-        Field::new("przestrzen_nazw", DataType::Utf8, false),
-        Field::new("lokalny_id", DataType::Utf8, false),
-        Field::new(
-            "wersja_id",
-            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
-            false,
-        ),
-        Field::new(
-            "poczatek_wersji_obiektu",
-            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
-            true,
-        ),
-        Field::new("wazny_od", DataType::Date32, true),
-        Field::new("wazny_do", DataType::Date32, true),
-        Field::new("teryt_wojewodztwo", DataType::Utf8, true),
-        Field::new("wojewodztwo", DataType::Utf8, false),
-        Field::new("teryt_powiat", DataType::Utf8, true),
-        Field::new("powiat", DataType::Utf8, false),
-        Field::new("teryt_gmina", DataType::Utf8, true),
-        Field::new("gmina", DataType::Utf8, false),
-        Field::new("teryt_miejscowosc", DataType::Utf8, true),
-        Field::new("miejscowosc", DataType::Utf8, false),
-        Field::new("czesc_miejscowosci", DataType::Utf8, true),
-        Field::new("teryt_ulica", DataType::Utf8, true),
-        Field::new("ulica", DataType::Utf8, true),
-        Field::new("numer_porzadkowy", DataType::Utf8, false),
-        Field::new("kod_pocztowy", DataType::Utf8, true),
-        Field::new("status", DataType::Utf8, false),
-        Field::new("dlugosc_geograficzna", DataType::Float64, true),
-        Field::new("szerokosc_geograficzna", DataType::Float64, true),
-        GEOM_TYPE.to_field("geometry", true),
-    ]))
-});
-const EPSG_2180: Lazy<Proj> = Lazy::new(|| Proj::from_epsg_code(2180).unwrap());
-const EPSG_4326: Lazy<Proj> = Lazy::new(|| Proj::from_epsg_code(4326).unwrap());
 
 fn get_attribute<'a>(
     event_start: &'a quick_xml::events::BytesStart<'_>,
@@ -264,4 +46,33 @@ fn option_append_value_or_null(builder: &mut StringBuilder, value: Option<String
 pub enum OutputFormat {
     CSV,
     GeoParquet,
+}
+
+pub enum SchemaVersion {
+    Model2012,
+    Model2021,
+}
+
+fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
+    let mut reader = Reader::from_file(&path)
+        .with_context(|| format!("could not read XML from file `{}`", &path.display()))?;
+    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (</x>)
+    return Ok(reader);
+}
+
+pub fn get_address_parser_2012(
+    file_path: &PathBuf,
+    batch_size: &usize,
+    output_format: &OutputFormat,
+    print_configuration: bool,
+) -> AddressParser {
+    let mut reader = get_xml_reader(&file_path).unwrap();
+    if print_configuration {
+        println!("⚙️  XML reader configuration: {:#?}", reader.config());
+        println!("----------------------------------------");
+    }
+    println!("Building dictionaries...");
+    let dict = build_dictionaries(reader);
+    reader = get_xml_reader(&file_path).unwrap();
+    AddressParser::new(reader, batch_size.clone(), dict, output_format.clone())
 }

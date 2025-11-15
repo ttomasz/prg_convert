@@ -10,9 +10,10 @@ use parquet::{
     basic::{BrotliLevel, Compression, ZstdLevel},
     file::properties::{WriterProperties, WriterVersion},
 };
-use quick_xml::reader::Reader;
 
-use prg_convert::{AddressParser, OutputFormat, SCHEMA_CSV, SCHEMA_GEOPARQUET, build_dictionaries};
+use prg_convert::{
+    OutputFormat, SCHEMA_CSV, SCHEMA_GEOPARQUET, SchemaVersion, get_address_parser_2012,
+};
 
 const DEFAULT_BATCH_SIZE: usize = 100_000;
 
@@ -66,23 +67,20 @@ struct Cli {
     parquet_version: Option<String>,
 }
 
-fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
-    let mut reader = Reader::from_file(&path)
-        .with_context(|| format!("could not read XML from file `{}`", &path.display()))?;
-    reader.config_mut().expand_empty_elements = true;
-    return Ok(reader);
-}
-
 fn main() -> Result<()> {
     let start_time = std::time::Instant::now();
     let args = Cli::parse();
     let batch_size = args.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
-    if &args.schema_version != "2012" && &args.schema_version != "2021" {
-        anyhow::bail!(
-            "unsupported schema version `{}`, expected one of: 2012, 2021",
-            &args.schema_version
-        );
-    }
+    let schema_version = match args.schema_version.to_lowercase().as_str() {
+        "2012" => SchemaVersion::Model2012,
+        "2021" => SchemaVersion::Model2021,
+        _ => {
+            anyhow::bail!(
+                "unsupported schema version `{}`, expected one of: 2012, 2021",
+                &args.schema_version
+            );
+        }
+    };
     if &args.schema_version == "2021" {
         anyhow::bail!("Schema version 2021 is not implemented yet.")
     }
@@ -221,11 +219,6 @@ fn main() -> Result<()> {
         }
         let input_file_size = input_file_metadata.len();
         total_size += &input_file_size;
-        let mut reader = get_xml_reader(&path).unwrap();
-        if counter == 1 {
-            println!("⚙️  XML reader configuration: {:#?}", reader.config());
-            println!("----------------------------------------");
-        }
 
         println!(
             "🪓 Processing file ({}/{}): `{}`, size: {:.2}MB.",
@@ -234,37 +227,43 @@ fn main() -> Result<()> {
             &path.display(),
             (input_file_size as f64 / 1024.0 / 1024.0)
         );
-        println!("Building dictionaries...");
-        let dict = build_dictionaries(reader);
-        reader = get_xml_reader(&path).unwrap();
         println!("Parsing data...");
-        AddressParser::new(reader, batch_size, dict, output_format.clone()).for_each(|batch| {
-            total_count += batch.num_rows();
-            println!("Read batch of {} addresses.", batch.num_rows());
-            match &output_format {
-                OutputFormat::CSV => {
-                    writer
-                        .csv
-                        .as_mut()
-                        .unwrap()
-                        .write(&batch)
-                        .expect("Failed to write batch.");
-                }
-                OutputFormat::GeoParquet => {
-                    let encoded_batch = gpq_encoder
-                        .as_mut()
-                        .unwrap()
-                        .encode_record_batch(&batch)
-                        .unwrap();
-                    writer
-                        .geoparquet
-                        .as_mut()
-                        .unwrap()
-                        .write(&encoded_batch)
-                        .unwrap();
-                }
+        match schema_version {
+            SchemaVersion::Model2012 => {
+                get_address_parser_2012(&path, &batch_size, &output_format, false).for_each(
+                    |batch| {
+                        total_count += batch.num_rows();
+                        println!("Read batch of {} addresses.", batch.num_rows());
+                        match &output_format {
+                            OutputFormat::CSV => {
+                                writer
+                                    .csv
+                                    .as_mut()
+                                    .unwrap()
+                                    .write(&batch)
+                                    .expect("Failed to write batch.");
+                            }
+                            OutputFormat::GeoParquet => {
+                                let encoded_batch = gpq_encoder
+                                    .as_mut()
+                                    .unwrap()
+                                    .encode_record_batch(&batch)
+                                    .unwrap();
+                                writer
+                                    .geoparquet
+                                    .as_mut()
+                                    .unwrap()
+                                    .write(&encoded_batch)
+                                    .unwrap();
+                            }
+                        }
+                    },
+                );
             }
-        });
+            SchemaVersion::Model2021 => {
+                anyhow::bail!("Schema version 2021 is not implemented yet.");
+            }
+        }
         counter += 1;
     }
     if matches!(output_format, OutputFormat::GeoParquet) {
