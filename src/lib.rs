@@ -7,15 +7,15 @@ use arrow::datatypes::Field;
 use arrow::datatypes::Schema;
 use arrow::datatypes::TimeUnit;
 use chrono::NaiveDate;
-use proj4rs::Proj;
 use geoarrow::datatypes::Crs;
 use geoarrow::datatypes::Metadata;
 use geoarrow::datatypes::{CoordType, Dimension, PointType};
 use once_cell::sync::Lazy;
+use proj4rs::Proj;
 
 mod model2012;
-pub use model2012::build_dictionaries;
 pub use model2012::AddressParser;
+pub use model2012::build_dictionaries;
 mod model2021;
 
 const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
@@ -24,8 +24,16 @@ pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("przestrzen_nazw", DataType::Utf8, false),
         Field::new("lokalny_id", DataType::Utf8, false),
-        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), false),
-        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), true),
+        Field::new(
+            "wersja_id",
+            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
+            false,
+        ),
+        Field::new(
+            "poczatek_wersji_obiektu",
+            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
+            true,
+        ),
         Field::new("wazny_od", DataType::Date32, true),
         Field::new("wazny_do", DataType::Date32, true),
         Field::new("teryt_wojewodztwo", DataType::Utf8, true),
@@ -48,7 +56,9 @@ pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
         Field::new("szerokosc_geograficzna", DataType::Float64, true),
     ]))
 });
-static PROJJSON_EPSG_2180: Lazy<serde_json::Value> = Lazy::new(|| {serde_json::from_str(r#"
+static PROJJSON_EPSG_2180: Lazy<serde_json::Value> = Lazy::new(|| {
+    serde_json::from_str(
+        r#"
     {
     "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
     "type": "ProjectedCRS",
@@ -173,16 +183,30 @@ static PROJJSON_EPSG_2180: Lazy<serde_json::Value> = Lazy::new(|| {serde_json::f
         "code": 2180
     }
     }
-"#).unwrap()});
-static CRS_2180: Lazy<Crs> = Lazy::new(|| { Crs::from_projjson(PROJJSON_EPSG_2180.clone()) });
-static GEOARROW_METADATA: Lazy<Arc<Metadata>> = Lazy::new(|| { Arc::new(Metadata::new(CRS_2180.clone(), None)) });
-static GEOM_TYPE: Lazy<PointType> = Lazy::new(|| { PointType::new(Dimension::XY, GEOARROW_METADATA.clone()).with_coord_type(CoordType::Separated) });
+"#,
+    )
+    .unwrap()
+});
+static CRS_2180: Lazy<Crs> = Lazy::new(|| Crs::from_projjson(PROJJSON_EPSG_2180.clone()));
+static GEOARROW_METADATA: Lazy<Arc<Metadata>> =
+    Lazy::new(|| Arc::new(Metadata::new(CRS_2180.clone(), None)));
+static GEOM_TYPE: Lazy<PointType> = Lazy::new(|| {
+    PointType::new(Dimension::XY, GEOARROW_METADATA.clone()).with_coord_type(CoordType::Separated)
+});
 pub static SCHEMA_GEOPARQUET: Lazy<Arc<Schema>> = Lazy::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("przestrzen_nazw", DataType::Utf8, false),
         Field::new("lokalny_id", DataType::Utf8, false),
-        Field::new("wersja_id", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), false),
-        Field::new("poczatek_wersji_obiektu", DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))), true),
+        Field::new(
+            "wersja_id",
+            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
+            false,
+        ),
+        Field::new(
+            "poczatek_wersji_obiektu",
+            DataType::Timestamp(TimeUnit::Millisecond, Some(Arc::from("UTC"))),
+            true,
+        ),
         Field::new("wazny_od", DataType::Date32, true),
         Field::new("wazny_do", DataType::Date32, true),
         Field::new("teryt_wojewodztwo", DataType::Utf8, true),
@@ -204,19 +228,20 @@ pub static SCHEMA_GEOPARQUET: Lazy<Arc<Schema>> = Lazy::new(|| {
         GEOM_TYPE.to_field("geometry", true),
     ]))
 });
-const EPSG_2180: Lazy<Proj> = Lazy::new(|| {Proj::from_epsg_code(2180).unwrap() });
-const EPSG_4326: Lazy<Proj> = Lazy::new(|| {Proj::from_epsg_code(4326).unwrap() });
+const EPSG_2180: Lazy<Proj> = Lazy::new(|| Proj::from_epsg_code(2180).unwrap());
+const EPSG_4326: Lazy<Proj> = Lazy::new(|| Proj::from_epsg_code(4326).unwrap());
 
-fn get_attribute<'a>(event_start: &'a quick_xml::events::BytesStart<'_>, attribute: &'a [u8]) -> Cow<'a, str> {
+fn get_attribute<'a>(
+    event_start: &'a quick_xml::events::BytesStart<'_>,
+    attribute: &'a [u8],
+) -> Cow<'a, str> {
     event_start
-    .attributes()
-    .find(|a| {
-        a.as_ref().unwrap().key.as_ref() == attribute
-    })
-    .unwrap()
-    .unwrap()
-    .decode_and_unescape_value(event_start.decoder())
-    .unwrap()
+        .attributes()
+        .find(|a| a.as_ref().unwrap().key.as_ref() == attribute)
+        .unwrap()
+        .unwrap()
+        .decode_and_unescape_value(event_start.decoder())
+        .unwrap()
 }
 
 fn str_append_value_or_null(builder: &mut StringBuilder, value: &str) {
