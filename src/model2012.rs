@@ -218,7 +218,7 @@ pub fn build_dictionaries(
     return dict;
 }
 
-pub struct AddressParser {
+pub struct AddressParser2012 {
     reader: Reader<std::io::BufReader<std::fs::File>>,
     batch_size: usize,
     additional_info: HashMap<String, AdditionalInfo>,
@@ -251,7 +251,7 @@ pub struct AddressParser {
     geometry: Vec<Option<Point>>,
 }
 
-impl AddressParser {
+impl AddressParser2012 {
     pub fn new(
         reader: Reader<std::io::BufReader<std::fs::File>>,
         batch_size: usize,
@@ -658,7 +658,7 @@ impl AddressParser {
     }
 }
 
-impl Iterator for AddressParser {
+impl Iterator for AddressParser2012 {
     type Item = arrow::array::RecordBatch;
 
     fn next(&mut self) -> Option<Self::Item> {

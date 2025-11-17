@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use arrow::array::Float64Builder;
 use arrow::array::StringBuilder;
+use quick_xml::Reader;
 
 mod constants;
 use constants::EPSG_2180;
@@ -11,10 +12,7 @@ use constants::EPSG_4326;
 pub use constants::SCHEMA_CSV;
 pub use constants::SCHEMA_GEOPARQUET;
 mod model2012;
-use model2012::AddressParser;
-use model2012::build_dictionaries;
-use quick_xml::Reader;
-
+use model2012::AddressParser2012;
 mod model2021;
 
 fn get_attribute<'a>(
@@ -118,17 +116,34 @@ pub fn get_address_parser_2012(
     batch_size: &usize,
     output_format: &OutputFormat,
     print_configuration: bool,
-) -> AddressParser {
+) -> AddressParser2012 {
     let mut reader = get_xml_reader(&file_path).unwrap();
     if print_configuration {
         println!("⚙️  XML reader configuration: {:#?}", reader.config());
         println!("----------------------------------------");
     }
     println!("Building dictionaries...");
-    let dict = build_dictionaries(reader);
+    let dict = model2012::build_dictionaries(reader);
     reader = get_xml_reader(&file_path).unwrap();
-    AddressParser::new(reader, batch_size.clone(), dict, output_format.clone())
+    AddressParser2012::new(reader, batch_size.clone(), dict, output_format.clone())
 }
+
+// pub fn get_address_parser_2021(
+//     file_path: &PathBuf,
+//     batch_size: &usize,
+//     output_format: &OutputFormat,
+//     print_configuration: bool,
+// ) -> AddressParser2021 {
+//     let mut reader = get_xml_reader(&file_path).unwrap();
+//     if print_configuration {
+//         println!("⚙️  XML reader configuration: {:#?}", reader.config());
+//         println!("----------------------------------------");
+//     }
+//     println!("Building dictionaries...");
+//     let dict = model2021::build_dictionaries(reader);
+//     reader = get_xml_reader(&file_path).unwrap();
+//     AddressParser2021::new(reader, batch_size.clone(), dict, output_format.clone())
+// }
 
 #[test]
 fn test_get_attribute_returns_value() {
@@ -155,9 +170,17 @@ fn test_parse_gml_pos_empty() {
     let mut latitude = Float64Builder::new();
     let mut x_epsg_2180 = Float64Builder::new();
     let mut y_epsg_2180 = Float64Builder::new();
-    let mut geometry= Vec::new();
+    let mut geometry = Vec::new();
     let gml_pos = "";
-    parse_gml_pos(gml_pos, &mut longitude, &mut latitude, &mut x_epsg_2180, &mut y_epsg_2180, &mut geometry, &OutputFormat::CSV);
+    parse_gml_pos(
+        gml_pos,
+        &mut longitude,
+        &mut latitude,
+        &mut x_epsg_2180,
+        &mut y_epsg_2180,
+        &mut geometry,
+        &OutputFormat::CSV,
+    );
 }
 
 #[test]
@@ -167,9 +190,17 @@ fn test_parse_gml_pos_1() {
     let mut latitude = Float64Builder::new();
     let mut x_epsg_2180 = Float64Builder::new();
     let mut y_epsg_2180 = Float64Builder::new();
-    let mut geometry= Vec::new();
+    let mut geometry = Vec::new();
     let gml_pos = "0.0";
-    parse_gml_pos(gml_pos, &mut longitude, &mut latitude, &mut x_epsg_2180, &mut y_epsg_2180, &mut geometry, &OutputFormat::CSV);
+    parse_gml_pos(
+        gml_pos,
+        &mut longitude,
+        &mut latitude,
+        &mut x_epsg_2180,
+        &mut y_epsg_2180,
+        &mut geometry,
+        &OutputFormat::CSV,
+    );
 }
 
 #[test]
@@ -179,9 +210,17 @@ fn test_parse_gml_pos_3() {
     let mut latitude = Float64Builder::new();
     let mut x_epsg_2180 = Float64Builder::new();
     let mut y_epsg_2180 = Float64Builder::new();
-    let mut geometry= Vec::new();
+    let mut geometry = Vec::new();
     let gml_pos = "0.0 1.1 2.2";
-    parse_gml_pos(gml_pos, &mut longitude, &mut latitude, &mut x_epsg_2180, &mut y_epsg_2180, &mut geometry, &OutputFormat::CSV);
+    parse_gml_pos(
+        gml_pos,
+        &mut longitude,
+        &mut latitude,
+        &mut x_epsg_2180,
+        &mut y_epsg_2180,
+        &mut geometry,
+        &OutputFormat::CSV,
+    );
 }
 
 #[test]
@@ -191,9 +230,17 @@ fn test_parse_gml_pos_nan_csv() {
     let mut latitude = Float64Builder::new();
     let mut x_epsg_2180 = Float64Builder::new();
     let mut y_epsg_2180 = Float64Builder::new();
-    let mut geometry= Vec::new();
+    let mut geometry = Vec::new();
     let gml_pos = "NaN NaN";
-    parse_gml_pos(gml_pos, &mut longitude, &mut latitude, &mut x_epsg_2180, &mut y_epsg_2180, &mut geometry, &OutputFormat::CSV);
+    parse_gml_pos(
+        gml_pos,
+        &mut longitude,
+        &mut latitude,
+        &mut x_epsg_2180,
+        &mut y_epsg_2180,
+        &mut geometry,
+        &OutputFormat::CSV,
+    );
     assert_eq!(longitude.len(), 1);
     assert_eq!(latitude.len(), 1);
     assert_eq!(x_epsg_2180.len(), 1);
@@ -216,9 +263,17 @@ fn test_parse_gml_pos_nan_geoparquet() {
     let mut latitude = Float64Builder::new();
     let mut x_epsg_2180 = Float64Builder::new();
     let mut y_epsg_2180 = Float64Builder::new();
-    let mut geometry= Vec::new();
+    let mut geometry = Vec::new();
     let gml_pos = "NaN NaN";
-    parse_gml_pos(gml_pos, &mut longitude, &mut latitude, &mut x_epsg_2180, &mut y_epsg_2180, &mut geometry, &OutputFormat::GeoParquet);
+    parse_gml_pos(
+        gml_pos,
+        &mut longitude,
+        &mut latitude,
+        &mut x_epsg_2180,
+        &mut y_epsg_2180,
+        &mut geometry,
+        &OutputFormat::GeoParquet,
+    );
     assert_eq!(longitude.len(), 1);
     assert_eq!(latitude.len(), 1);
     assert!(x_epsg_2180.is_empty());
