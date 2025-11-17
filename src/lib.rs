@@ -14,6 +14,7 @@ pub use constants::SCHEMA_GEOPARQUET;
 mod model2012;
 use model2012::AddressParser2012;
 mod model2021;
+use model2021::AddressParser2021;
 
 fn get_attribute<'a>(
     event_start: &'a quick_xml::events::BytesStart<'_>,
@@ -128,22 +129,22 @@ pub fn get_address_parser_2012(
     AddressParser2012::new(reader, batch_size.clone(), dict, output_format.clone())
 }
 
-// pub fn get_address_parser_2021(
-//     file_path: &PathBuf,
-//     batch_size: &usize,
-//     output_format: &OutputFormat,
-//     print_configuration: bool,
-// ) -> AddressParser2021 {
-//     let mut reader = get_xml_reader(&file_path).unwrap();
-//     if print_configuration {
-//         println!("⚙️  XML reader configuration: {:#?}", reader.config());
-//         println!("----------------------------------------");
-//     }
-//     println!("Building dictionaries...");
-//     let dict = model2021::build_dictionaries(reader);
-//     reader = get_xml_reader(&file_path).unwrap();
-//     AddressParser2021::new(reader, batch_size.clone(), dict, output_format.clone())
-// }
+pub fn get_address_parser_2021(
+    file_path: &PathBuf,
+    batch_size: &usize,
+    output_format: &OutputFormat,
+    print_configuration: bool,
+) -> AddressParser2021 {
+    let mut reader = get_xml_reader(&file_path).unwrap();
+    if print_configuration {
+        println!("⚙️  XML reader configuration: {:#?}", reader.config());
+        println!("----------------------------------------");
+    }
+    println!("Building dictionaries...");
+    let dict = model2021::build_dictionaries(reader);
+    reader = get_xml_reader(&file_path).unwrap();
+    AddressParser2021::new(reader, batch_size.clone(), dict, output_format.clone())
+}
 
 #[test]
 fn test_get_attribute_returns_value() {

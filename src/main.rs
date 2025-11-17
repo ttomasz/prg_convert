@@ -13,6 +13,7 @@ use parquet::{
 
 use prg_convert::{
     OutputFormat, SCHEMA_CSV, SCHEMA_GEOPARQUET, SchemaVersion, get_address_parser_2012,
+    get_address_parser_2021,
 };
 
 const DEFAULT_BATCH_SIZE: usize = 100_000;
@@ -81,9 +82,6 @@ fn main() -> Result<()> {
             );
         }
     };
-    if &args.schema_version == "2021" {
-        anyhow::bail!("Schema version 2021 is not implemented yet.")
-    }
     let (output_format, schema) = match args.output_format.to_lowercase().as_str() {
         "csv" => (OutputFormat::CSV, SCHEMA_CSV.clone()),
         "geoparquet" => (OutputFormat::GeoParquet, SCHEMA_GEOPARQUET.clone()),
@@ -230,7 +228,7 @@ fn main() -> Result<()> {
         println!("Parsing data...");
         match schema_version {
             SchemaVersion::Model2012 => {
-                get_address_parser_2012(&path, &batch_size, &output_format, false).for_each(
+                get_address_parser_2012(&path, &batch_size, &output_format, counter == 1).for_each(
                     |batch| {
                         total_count += batch.num_rows();
                         println!("Read batch of {} addresses.", batch.num_rows());
@@ -261,7 +259,35 @@ fn main() -> Result<()> {
                 );
             }
             SchemaVersion::Model2021 => {
-                anyhow::bail!("Schema version 2021 is not implemented yet.");
+                get_address_parser_2021(&path, &batch_size, &output_format, counter == 1).for_each(
+                    |batch| {
+                        total_count += batch.num_rows();
+                        println!("Read batch of {} addresses.", batch.num_rows());
+                        match &output_format {
+                            OutputFormat::CSV => {
+                                writer
+                                    .csv
+                                    .as_mut()
+                                    .unwrap()
+                                    .write(&batch)
+                                    .expect("Failed to write batch.");
+                            }
+                            OutputFormat::GeoParquet => {
+                                let encoded_batch = gpq_encoder
+                                    .as_mut()
+                                    .unwrap()
+                                    .encode_record_batch(&batch)
+                                    .unwrap();
+                                writer
+                                    .geoparquet
+                                    .as_mut()
+                                    .unwrap()
+                                    .write(&encoded_batch)
+                                    .unwrap();
+                            }
+                        }
+                    },
+                );
             }
         }
         counter += 1;
