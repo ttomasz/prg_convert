@@ -42,6 +42,11 @@ struct Cli {
     #[arg(long = "schema-version", help = "Schema version (one of: 2012, 2021).")]
     schema_version: String,
     #[arg(
+        long = "teryt-path",
+        help = "Path of XML file with teryt dictionary unpacked from archive downloaded from: https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default (TERC, podstawowa). Required for schema 2021."
+    )]
+    teryt_path: Option<std::path::PathBuf>,
+    #[arg(
         long = "batch-size",
         help = format!("(Optional) How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE),
     )]
@@ -72,6 +77,11 @@ fn main() -> Result<()> {
     let start_time = std::time::Instant::now();
     let args = Cli::parse();
     let batch_size = args.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
+    if args.schema_version.to_lowercase() == "2021" && args.teryt_path.is_none() {
+        anyhow::bail!(
+            "Chosen schema 2021 but did not provide teryt file path. PRG schema 2021 does not contain names of administrative units so they need to be read from external source."
+        )
+    }
     let schema_version = match args.schema_version.to_lowercase().as_str() {
         "2012" => SchemaVersion::Model2012,
         "2021" => SchemaVersion::Model2021,
@@ -259,35 +269,40 @@ fn main() -> Result<()> {
                 );
             }
             SchemaVersion::Model2021 => {
-                get_address_parser_2021(&path, &batch_size, &output_format, counter == 1).for_each(
-                    |batch| {
-                        total_count += batch.num_rows();
-                        println!("Read batch of {} addresses.", batch.num_rows());
-                        match &output_format {
-                            OutputFormat::CSV => {
-                                writer
-                                    .csv
-                                    .as_mut()
-                                    .unwrap()
-                                    .write(&batch)
-                                    .expect("Failed to write batch.");
-                            }
-                            OutputFormat::GeoParquet => {
-                                let encoded_batch = gpq_encoder
-                                    .as_mut()
-                                    .unwrap()
-                                    .encode_record_batch(&batch)
-                                    .unwrap();
-                                writer
-                                    .geoparquet
-                                    .as_mut()
-                                    .unwrap()
-                                    .write(&encoded_batch)
-                                    .unwrap();
-                            }
+                get_address_parser_2021(
+                    &path,
+                    &batch_size,
+                    &output_format,
+                    counter == 1,
+                    &args.teryt_path.clone().unwrap(),
+                )
+                .for_each(|batch| {
+                    total_count += batch.num_rows();
+                    println!("Read batch of {} addresses.", batch.num_rows());
+                    match &output_format {
+                        OutputFormat::CSV => {
+                            writer
+                                .csv
+                                .as_mut()
+                                .unwrap()
+                                .write(&batch)
+                                .expect("Failed to write batch.");
                         }
-                    },
-                );
+                        OutputFormat::GeoParquet => {
+                            let encoded_batch = gpq_encoder
+                                .as_mut()
+                                .unwrap()
+                                .encode_record_batch(&batch)
+                                .unwrap();
+                            writer
+                                .geoparquet
+                                .as_mut()
+                                .unwrap()
+                                .write(&encoded_batch)
+                                .unwrap();
+                        }
+                    }
+                });
             }
         }
         counter += 1;

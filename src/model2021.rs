@@ -26,6 +26,7 @@ use crate::get_attribute;
 use crate::option_append_value_or_null;
 use crate::parse_gml_pos;
 use crate::str_append_value_or_null;
+use crate::terc::TERC;
 
 const CITY_TAG: &[u8] = b"prgad:AD_Miejscowosc";
 const STREET_TAG: &[u8] = b"prgad:AD_UlicaPlac";
@@ -308,8 +309,9 @@ pub fn build_dictionaries(mut reader: Reader<std::io::BufReader<std::fs::File>>)
 pub struct AddressParser2021 {
     reader: Reader<std::io::BufReader<std::fs::File>>,
     batch_size: usize,
-    additional_info: Mappings,
     output_format: OutputFormat,
+    additional_info: Mappings,
+    teryt_names: HashMap<String, TERC>,
     count: usize,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
@@ -342,14 +344,16 @@ impl AddressParser2021 {
     pub fn new(
         reader: Reader<std::io::BufReader<std::fs::File>>,
         batch_size: usize,
-        additional_info: Mappings,
         output_format: OutputFormat,
+        additional_info: Mappings,
+        teryt_names: HashMap<String, TERC>,
     ) -> Self {
         Self {
             reader: reader,
             batch_size: batch_size,
-            additional_info: additional_info,
             output_format: output_format,
+            additional_info: additional_info,
+            teryt_names: teryt_names,
             count: 0,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
@@ -485,6 +489,21 @@ impl AddressParser2021 {
                                     &mut self.city_teryt_id,
                                     c.city_teryt_id.clone(),
                                 );
+                                let terc_info = self.teryt_names.get(&c.municipality_teryt_id);
+                                if terc_info.is_some() {
+                                    let t = terc_info.unwrap();
+                                    self.voivodeship_teryt_id
+                                        .append_value(t.voivodeship_teryt_id.clone());
+                                    self.voivodeship.append_value(t.voivodeship_name.clone());
+                                    self.county_teryt_id.append_value(t.county_teryt_id.clone());
+                                    self.county.append_value(t.county_name.clone());
+                                    self.municipality.append_value(t.municipality_name.clone());
+                                } else {
+                                    println!(
+                                        "Could not find info for municipality with teryt id: {}",
+                                        &c.municipality_teryt_id
+                                    );
+                                }
                             }
                             nested_tag = false;
                             tag_ignore_text = true;

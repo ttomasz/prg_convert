@@ -6,6 +6,8 @@ use arrow::array::Float64Builder;
 use arrow::array::StringBuilder;
 use quick_xml::Reader;
 
+mod terc;
+use terc::get_terc_mapping;
 mod constants;
 use constants::EPSG_2180;
 use constants::EPSG_4326;
@@ -134,7 +136,12 @@ pub fn get_address_parser_2021(
     batch_size: &usize,
     output_format: &OutputFormat,
     print_configuration: bool,
+    teryt_file_path: &PathBuf,
 ) -> AddressParser2021 {
+    let teryt_file = std::fs::File::open(teryt_file_path)
+        .expect("Could not read XML file with TERYT (TERC) data.");
+    let teryt_reader = std::io::BufReader::new(teryt_file);
+    let teryt_mapping = get_terc_mapping(teryt_reader);
     let mut reader = get_xml_reader(&file_path).unwrap();
     if print_configuration {
         println!("⚙️  XML reader configuration: {:#?}", reader.config());
@@ -143,7 +150,13 @@ pub fn get_address_parser_2021(
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
     reader = get_xml_reader(&file_path).unwrap();
-    AddressParser2021::new(reader, batch_size.clone(), dict, output_format.clone())
+    AddressParser2021::new(
+        reader,
+        batch_size.clone(),
+        output_format.clone(),
+        dict,
+        teryt_mapping,
+    )
 }
 
 #[test]
