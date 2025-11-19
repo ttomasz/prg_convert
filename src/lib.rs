@@ -102,9 +102,32 @@ pub enum OutputFormat {
     GeoParquet,
 }
 
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       match self {
+           OutputFormat::CSV => write!(f, "csv"),
+           OutputFormat::GeoParquet => write!(f, "geoparquet"),
+       }
+    }
+}
+
 pub enum SchemaVersion {
     Model2012,
     Model2021,
+}
+
+impl std::fmt::Display for SchemaVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       match self {
+           SchemaVersion::Model2012 => write!(f, "2012"),
+           SchemaVersion::Model2021 => write!(f, "2021"),
+       }
+    }
+}
+
+pub struct Writer {
+    pub csv: Option<arrow::csv::writer::Writer<std::fs::File>>,
+    pub geoparquet: Option<parquet::arrow::arrow_writer::ArrowWriter<std::fs::File>>,
 }
 
 fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
