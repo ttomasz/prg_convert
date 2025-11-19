@@ -133,7 +133,7 @@ pub struct Writer {
 fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
     let mut reader = Reader::from_file(&path)
         .with_context(|| format!("could not read XML from file `{}`", &path.display()))?;
-    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (</x>)
+    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
     return Ok(reader);
 }
 
