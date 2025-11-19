@@ -64,7 +64,7 @@ pub fn get_terc_mapping(reader: std::io::BufReader<std::fs::File>) -> HashMap<St
         .join("");
         match teryt_id.len() {
             2 => {
-                woj.insert(teryt_id, row.nazwa);
+                woj.insert(teryt_id, row.nazwa.to_lowercase()); // teryt dictionary has them all uppercase, while previous prg schema had them all lowercase
             }
             4 => {
                 pow.insert(teryt_id, row.nazwa);
