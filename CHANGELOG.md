@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.4.0] - 2025-11-19
+
+### Added
+
+- option `--schema-version 2021` is now available, you can convert files in the new schema. Note that these files require to download additional dictionary with administrative unit names, see README.md for details
+
+### Changed
+
+- changed schema of output data to match both PRG models 2012 and 2021. Field `wazny_od` has been renamed to `wazny_od_lub_data_nadania`, field `status` is nullable now
+
 ## [v0.3.0] - 2025-11-12
 
 ### Fixed
