@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use arrow::array::Float64Builder;
 use arrow::array::StringBuilder;
 use quick_xml::Reader;
@@ -24,11 +24,11 @@ fn get_attribute<'a>(
 ) -> Cow<'a, str> {
     event_start
         .attributes()
-        .find(|a| a.as_ref().unwrap().key.as_ref() == attribute)
-        .unwrap()
-        .unwrap()
+        .find(|a| a.as_ref().expect("Could not parse attribute.").key.as_ref() == attribute)
+        .expect("Could not find attribute.")
+        .expect("Could not parse attribute.")
         .decode_and_unescape_value(event_start.decoder())
-        .unwrap()
+        .expect("Could not decode attribute value.")
 }
 
 fn str_append_value_or_null(builder: &mut StringBuilder, value: &str) {
@@ -40,10 +40,13 @@ fn str_append_value_or_null(builder: &mut StringBuilder, value: &str) {
 }
 
 fn option_append_value_or_null(builder: &mut StringBuilder, value: Option<String>) {
-    if value.is_none() {
-        builder.append_null();
-    } else {
-        builder.append_value(value.unwrap());
+    match value {
+        None => {
+            builder.append_null();
+        }
+        Some(s) => {
+            builder.append_value(s);
+        }
     }
 }
 
@@ -104,10 +107,10 @@ pub enum OutputFormat {
 
 impl std::fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-       match self {
-           OutputFormat::CSV => write!(f, "csv"),
-           OutputFormat::GeoParquet => write!(f, "geoparquet"),
-       }
+        match self {
+            OutputFormat::CSV => write!(f, "csv"),
+            OutputFormat::GeoParquet => write!(f, "geoparquet"),
+        }
     }
 }
 
@@ -118,10 +121,10 @@ pub enum SchemaVersion {
 
 impl std::fmt::Display for SchemaVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-       match self {
-           SchemaVersion::Model2012 => write!(f, "2012"),
-           SchemaVersion::Model2021 => write!(f, "2021"),
-       }
+        match self {
+            SchemaVersion::Model2012 => write!(f, "2012"),
+            SchemaVersion::Model2021 => write!(f, "2021"),
+        }
     }
 }
 
@@ -130,9 +133,9 @@ pub struct Writer {
     pub geoparquet: Option<parquet::arrow::arrow_writer::ArrowWriter<std::fs::File>>,
 }
 
-fn get_xml_reader(path: &PathBuf) -> Result<Reader<std::io::BufReader<std::fs::File>>> {
+fn get_xml_reader(path: &PathBuf) -> anyhow::Result<Reader<std::io::BufReader<std::fs::File>>> {
     let mut reader = Reader::from_file(&path)
-        .with_context(|| format!("could not read XML from file `{}`", &path.display()))?;
+        .with_context(|| format!("could not read XML from file `{}`", &path.to_string_lossy()))?;
     reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
     return Ok(reader);
 }
@@ -142,16 +145,21 @@ pub fn get_address_parser_2012(
     batch_size: &usize,
     output_format: &OutputFormat,
     print_configuration: bool,
-) -> AddressParser2012 {
-    let mut reader = get_xml_reader(&file_path).unwrap();
+) -> anyhow::Result<AddressParser2012> {
+    let mut reader = get_xml_reader(&file_path)?;
     if print_configuration {
         println!("⚙️  XML reader configuration: {:#?}", reader.config());
         println!("----------------------------------------");
     }
     println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
-    reader = get_xml_reader(&file_path).unwrap();
-    AddressParser2012::new(reader, batch_size.clone(), dict, output_format.clone())
+    reader = get_xml_reader(&file_path)?;
+    Ok(AddressParser2012::new(
+        reader,
+        batch_size.clone(),
+        dict,
+        output_format.clone(),
+    ))
 }
 
 pub fn get_address_parser_2021(
@@ -160,26 +168,30 @@ pub fn get_address_parser_2021(
     output_format: &OutputFormat,
     print_configuration: bool,
     teryt_file_path: &PathBuf,
-) -> AddressParser2021 {
-    let teryt_file = std::fs::File::open(teryt_file_path)
-        .expect("Could not read XML file with TERYT (TERC) data.");
+) -> anyhow::Result<AddressParser2021> {
+    let teryt_file = std::fs::File::open(teryt_file_path).with_context(|| {
+        format!(
+            "could not open file `{}`",
+            &teryt_file_path.to_string_lossy()
+        )
+    })?;
     let teryt_reader = std::io::BufReader::new(teryt_file);
-    let teryt_mapping = get_terc_mapping(teryt_reader);
-    let mut reader = get_xml_reader(&file_path).unwrap();
+    let teryt_mapping = get_terc_mapping(teryt_reader)?;
+    let mut reader = get_xml_reader(&file_path)?;
     if print_configuration {
         println!("⚙️  XML reader configuration: {:#?}", reader.config());
         println!("----------------------------------------");
     }
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
-    reader = get_xml_reader(&file_path).unwrap();
-    AddressParser2021::new(
+    reader = get_xml_reader(&file_path)?;
+    Ok(AddressParser2021::new(
         reader,
         batch_size.clone(),
         output_format.clone(),
         dict,
         teryt_mapping,
-    )
+    ))
 }
 
 #[test]

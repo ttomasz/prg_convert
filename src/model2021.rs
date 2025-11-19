@@ -162,7 +162,7 @@ fn parse_city(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> City {
                     // if last_tag is empty, we are not inside a tag and we don't want that text
                     continue;
                 }
-                let text_decoded = e.decode().unwrap();
+                let text_decoded = e.decode().expect("Failed to decode text.");
                 let text_trimmed = text_decoded.trim();
                 match last_tag.as_slice() {
                     b"prg-ad:nazwa" => {
@@ -224,7 +224,7 @@ fn parse_street(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> Stree
                     // if last_tag is empty, we are not inside a tag and we don't want that text
                     continue;
                 }
-                let text_decoded = e.decode().unwrap();
+                let text_decoded = e.decode().expect("Failed to decode text.");
                 let text_trimmed = text_decoded.trim();
                 match last_tag.as_slice() {
                     b"prgad:rodzaj" => {
@@ -480,29 +480,36 @@ impl AddressParser2021 {
                         b"prgad:miejscowosc" => {
                             let id = &get_attribute(e, b"xlink:href")[1..];
                             let city = self.additional_info.city.get(id);
-                            if city.is_some() {
-                                let c = city.unwrap();
-                                self.city.append_value(&c.name);
-                                self.municipality_teryt_id
-                                    .append_value(&c.municipality_teryt_id);
-                                option_append_value_or_null(
-                                    &mut self.city_teryt_id,
-                                    c.city_teryt_id.clone(),
-                                );
-                                let terc_info = self.teryt_names.get(&c.municipality_teryt_id);
-                                if terc_info.is_some() {
-                                    let t = terc_info.unwrap();
-                                    self.voivodeship_teryt_id
-                                        .append_value(t.voivodeship_teryt_id.clone());
-                                    self.voivodeship.append_value(t.voivodeship_name.clone());
-                                    self.county_teryt_id.append_value(t.county_teryt_id.clone());
-                                    self.county.append_value(t.county_name.clone());
-                                    self.municipality.append_value(t.municipality_name.clone());
-                                } else {
-                                    println!(
-                                        "Could not find info for municipality with teryt id: {}",
-                                        &c.municipality_teryt_id
+                            match city {
+                                None => {}
+                                Some(c) => {
+                                    self.city.append_value(&c.name);
+                                    self.municipality_teryt_id
+                                        .append_value(&c.municipality_teryt_id);
+                                    option_append_value_or_null(
+                                        &mut self.city_teryt_id,
+                                        c.city_teryt_id.clone(),
                                     );
+                                    let terc_info = self.teryt_names.get(&c.municipality_teryt_id);
+                                    match terc_info {
+                                        None => {
+                                            println!(
+                                                "Could not find info for municipality with teryt id: {}",
+                                                &c.municipality_teryt_id
+                                            );
+                                        }
+                                        Some(t) => {
+                                            self.voivodeship_teryt_id
+                                                .append_value(t.voivodeship_teryt_id.clone());
+                                            self.voivodeship
+                                                .append_value(t.voivodeship_name.clone());
+                                            self.county_teryt_id
+                                                .append_value(t.county_teryt_id.clone());
+                                            self.county.append_value(t.county_name.clone());
+                                            self.municipality
+                                                .append_value(t.municipality_name.clone());
+                                        }
+                                    }
                                 }
                             }
                             nested_tag = false;
@@ -511,13 +518,15 @@ impl AddressParser2021 {
                         b"prgad:ulica2" => {
                             let id = &get_attribute(e, b"xlink:href")[1..];
                             let street = self.additional_info.street.get(id);
-                            if street.is_some() {
-                                let s = street.unwrap();
-                                self.street.append_value(&s.name);
-                                option_append_value_or_null(
-                                    &mut self.street_teryt_id,
-                                    s.teryt_id.clone(),
-                                );
+                            match street {
+                                None => {}
+                                Some(s) => {
+                                    self.street.append_value(&s.name);
+                                    option_append_value_or_null(
+                                        &mut self.street_teryt_id,
+                                        s.teryt_id.clone(),
+                                    );
+                                }
                             }
                             nested_tag = false;
                             tag_ignore_text = true;
@@ -534,7 +543,7 @@ impl AddressParser2021 {
                         // if nested_tag is true, we are inside a nested tag that we want to skip (only read innermost text not the whole tree branch)
                         continue;
                     }
-                    let text_decoded = e.decode().unwrap();
+                    let text_decoded = e.decode().expect("Failed to decode text.");
                     let text_trimmed = text_decoded.trim();
                     match last_tag.as_slice() {
                         b"prgad:lokalnyId" => {

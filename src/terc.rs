@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::Context;
 use quick_xml::de::Deserializer;
 use serde::Deserialize;
 
@@ -47,10 +48,12 @@ pub struct TERC {
     pub municipality_name: String,
 }
 
-pub fn get_terc_mapping(reader: std::io::BufReader<std::fs::File>) -> HashMap<String, TERC> {
+pub fn get_terc_mapping(
+    reader: std::io::BufReader<std::fs::File>,
+) -> anyhow::Result<HashMap<String, TERC>> {
     let mut deserializer = Deserializer::from_reader(reader);
     let teryt = Teryt::deserialize(&mut deserializer)
-        .expect("Could not deserialize teryt dictionary from xml file.");
+        .with_context(|| "Could not deserialize teryt dictionary from XML file.")?;
     let mut woj = HashMap::new();
     let mut pow = HashMap::new();
     let mut mapping = HashMap::new();
@@ -86,5 +89,5 @@ pub fn get_terc_mapping(reader: std::io::BufReader<std::fs::File>) -> HashMap<St
             }
         }
     }
-    mapping
+    Ok(mapping)
 }

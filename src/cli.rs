@@ -128,7 +128,7 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
 impl TryInto<ParsedArgs> for RawArgs {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<ParsedArgs, anyhow::Error> {
+    fn try_into(self) -> anyhow::Result<ParsedArgs> {
         let batch_size = self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
         if self.schema_version.to_lowercase() == "2021" && self.teryt_path.is_none() {
             anyhow::bail!(
@@ -162,12 +162,12 @@ impl TryInto<ParsedArgs> for RawArgs {
         };
         let parquet_compression = match &self.parquet_compression.as_deref() {
             None | Some("zstd") => {
-                Compression::ZSTD(ZstdLevel::try_new(compression_level.unwrap()).unwrap())
+                Compression::ZSTD(ZstdLevel::try_new(compression_level.unwrap())?)
             }
             Some("snappy") => Compression::SNAPPY,
-            Some("brotli") => Compression::BROTLI(
-                BrotliLevel::try_new(compression_level.unwrap().cast_unsigned()).unwrap(),
-            ),
+            Some("brotli") => Compression::BROTLI(BrotliLevel::try_new(
+                compression_level.unwrap().cast_unsigned(),
+            )?),
             _ => {
                 anyhow::bail!(
                     "Unexpected compression type for parquet writer: `{:?}`",
@@ -190,8 +190,8 @@ impl TryInto<ParsedArgs> for RawArgs {
             .input_paths
             .clone()
             .into_iter()
-            .flat_map(|p| glob(&p).expect("Failed to read glob pattern"))
-            .map(|p| p.unwrap())
+            .flat_map(|p| glob(&p).expect("Failed to parse glob pattern."))
+            .map(|p| p.expect("Failed to read path."))
             .collect();
         Ok(ParsedArgs {
             input_paths: self.input_paths,

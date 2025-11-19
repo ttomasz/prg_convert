@@ -20,14 +20,12 @@ fn main() -> Result<()> {
     let mut total_row_count = 0;
     let mut total_file_size = 0;
 
-    let output_file = std::fs::File::create(&parsed_args.output_path)
-        .with_context(|| {
-            format!(
-                "could not create output file `{}`",
-                &parsed_args.output_path.to_string_lossy()
-            )
-        })
-        .unwrap();
+    let output_file = std::fs::File::create(&parsed_args.output_path).with_context(|| {
+        format!(
+            "could not create output file `{}`",
+            &parsed_args.output_path.to_string_lossy()
+        )
+    })?;
     let (mut writer, mut gpq_encoder) = match &parsed_args.output_format {
         OutputFormat::CSV => (
             Writer {
@@ -46,13 +44,13 @@ fn main() -> Result<()> {
                 &parsed_args.schema,
                 &GeoParquetWriterOptions::default(),
             )
-            .unwrap();
+            .expect("Could not create GeoParquet encoder.");
             (
                 Writer {
                     csv: None,
                     geoparquet: Some(
                         ArrowWriter::try_new(output_file, gpq_encoder.target_schema(), Some(props))
-                            .unwrap(),
+                            .expect("Could not create GeoParquet writer."),
                     ),
                 },
                 Some(gpq_encoder),
@@ -88,7 +86,7 @@ fn main() -> Result<()> {
                     &parsed_args.batch_size,
                     &parsed_args.output_format,
                     file_counter == 1,
-                )
+                )?
                 .for_each(|batch| {
                     total_row_count += batch.num_rows();
                     println!("Read batch of {} addresses.", batch.num_rows());
@@ -124,7 +122,7 @@ fn main() -> Result<()> {
                     &parsed_args.output_format,
                     file_counter == 1,
                     &parsed_args.teryt_path.clone().unwrap(),
-                )
+                )?
                 .for_each(|batch| {
                     total_row_count += batch.num_rows();
                     println!("Read batch of {} addresses.", batch.num_rows());
@@ -142,13 +140,13 @@ fn main() -> Result<()> {
                                 .as_mut()
                                 .unwrap()
                                 .encode_record_batch(&batch)
-                                .unwrap();
+                                .expect("Failed to encode batch.");
                             writer
                                 .geoparquet
                                 .as_mut()
                                 .unwrap()
                                 .write(&encoded_batch)
-                                .unwrap();
+                                .expect("Failed to write batch.");
                         }
                     }
                 });
@@ -157,7 +155,10 @@ fn main() -> Result<()> {
         file_counter += 1;
     }
     if matches!(parsed_args.output_format, OutputFormat::GeoParquet) {
-        let kv_metadata = gpq_encoder.unwrap().into_keyvalue().unwrap();
+        let kv_metadata = gpq_encoder
+            .unwrap()
+            .into_keyvalue()
+            .expect("Could not create GeoParquet K/V metadata.");
         let parquet_writer = writer.geoparquet.as_mut().unwrap();
         parquet_writer.append_key_value_metadata(kv_metadata);
         parquet_writer

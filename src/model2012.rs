@@ -94,7 +94,7 @@ fn parse_additional_info(
                     // if last_tag is empty, we are not inside a tag and we don't want that text
                     continue;
                 }
-                let text_decoded = e.decode().unwrap();
+                let text_decoded = e.decode().expect("Failed to decode text.");
                 let text_trimmed = text_decoded.trim();
                 match last_tag.as_slice() {
                     b"prg-ad:nazwa" => {
@@ -449,7 +449,7 @@ impl AddressParser2012 {
                         // if nested_tag is true, we are inside a nested tag that we want to skip (only read innermost text not the whole tree branch)
                         continue;
                     }
-                    let text_decoded = e.decode().unwrap();
+                    let text_decoded = e.decode().expect("Failed to decode text.");
                     let text_trimmed = text_decoded.trim();
                     match last_tag.as_slice() {
                         b"gml:identifier" => {}
