@@ -209,7 +209,7 @@ fn parse_city(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> City {
 fn parse_street(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> Street {
     let mut buffer = Vec::new();
     let mut last_tag = Vec::new();
-    let mut kind = "";
+    let mut kind = String::new();
     let mut name = String::new();
     let mut teryt_id = None;
     let mut part1 = String::new();
@@ -228,7 +228,7 @@ fn parse_street(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> Stree
                 let text_trimmed = text_decoded.trim();
                 match last_tag.as_slice() {
                     b"prgad:rodzaj" => {
-                        kind = STREET_TYPE.get(text_trimmed).cloned().unwrap_or("");
+                        kind = text_trimmed.to_owned();
                     }
                     b"prgad:identyfikatorULIC" => {
                         teryt_id = Some(text_trimmed.to_string());
