@@ -13,6 +13,7 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 - Pasek stanu postępu
 - Optymalizacja ustawień formatu parquet (encodings, bloom filters, etc)
 - Wielowątkowość
+- Python bindings
 
 ## Obsługa
 Pobierz plik zip (Windows) lub tar.gz (Linuks) z zakładki [Releases](https://github.com/ttomasz/prg_convert/releases) i rozpakuj go.
