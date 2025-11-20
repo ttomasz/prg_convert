@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use arrow::csv::writer::WriterBuilder;
+use arrow::{array::RecordBatch, csv::writer::WriterBuilder};
 use clap::Parser;
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperties};
@@ -8,6 +8,37 @@ mod cli;
 use prg_convert::{
     OutputFormat, SchemaVersion, Writer, get_address_parser_2012, get_address_parser_2021,
 };
+
+fn write_batch(
+    output_format: &OutputFormat,
+    writer: &mut Writer,
+    geoparquet_encoder: &mut Option<GeoParquetRecordBatchEncoder>,
+    batch: RecordBatch,
+) {
+    match output_format {
+        OutputFormat::CSV => {
+            writer
+                .csv
+                .as_mut()
+                .unwrap()
+                .write(&batch)
+                .expect("Failed to write batch.");
+        }
+        OutputFormat::GeoParquet => {
+            let encoded_batch = geoparquet_encoder
+                .as_mut()
+                .unwrap()
+                .encode_record_batch(&batch)
+                .expect("Failed to encode batch.");
+            writer
+                .geoparquet
+                .as_mut()
+                .unwrap()
+                .write(&encoded_batch)
+                .expect("Failed to write batch.");
+        }
+    }
+}
 
 fn main() -> Result<()> {
     let start_time = std::time::Instant::now();
@@ -26,7 +57,7 @@ fn main() -> Result<()> {
             &parsed_args.output_path.to_string_lossy()
         )
     })?;
-    let (mut writer, mut gpq_encoder) = match &parsed_args.output_format {
+    let (mut writer, mut geoparquet_encoder) = match &parsed_args.output_format {
         OutputFormat::CSV => (
             Writer {
                 csv: Some(WriterBuilder::new().with_header(true).build(output_file)),
@@ -90,29 +121,12 @@ fn main() -> Result<()> {
                 .for_each(|batch| {
                     total_row_count += batch.num_rows();
                     println!("Read batch of {} addresses.", batch.num_rows());
-                    match &parsed_args.output_format {
-                        OutputFormat::CSV => {
-                            writer
-                                .csv
-                                .as_mut()
-                                .unwrap()
-                                .write(&batch)
-                                .expect("Failed to write batch.");
-                        }
-                        OutputFormat::GeoParquet => {
-                            let encoded_batch = gpq_encoder
-                                .as_mut()
-                                .unwrap()
-                                .encode_record_batch(&batch)
-                                .expect("Failed to encode batch.");
-                            writer
-                                .geoparquet
-                                .as_mut()
-                                .unwrap()
-                                .write(&encoded_batch)
-                                .expect("Failed to write batch.");
-                        }
-                    }
+                    write_batch(
+                        &parsed_args.output_format,
+                        &mut writer,
+                        &mut geoparquet_encoder,
+                        batch,
+                    );
                 });
             }
             SchemaVersion::Model2021 => {
@@ -126,36 +140,19 @@ fn main() -> Result<()> {
                 .for_each(|batch| {
                     total_row_count += batch.num_rows();
                     println!("Read batch of {} addresses.", batch.num_rows());
-                    match &parsed_args.output_format {
-                        OutputFormat::CSV => {
-                            writer
-                                .csv
-                                .as_mut()
-                                .unwrap()
-                                .write(&batch)
-                                .expect("Failed to write batch.");
-                        }
-                        OutputFormat::GeoParquet => {
-                            let encoded_batch = gpq_encoder
-                                .as_mut()
-                                .unwrap()
-                                .encode_record_batch(&batch)
-                                .expect("Failed to encode batch.");
-                            writer
-                                .geoparquet
-                                .as_mut()
-                                .unwrap()
-                                .write(&encoded_batch)
-                                .expect("Failed to write batch.");
-                        }
-                    }
+                    write_batch(
+                        &parsed_args.output_format,
+                        &mut writer,
+                        &mut geoparquet_encoder,
+                        batch,
+                    );
                 });
             }
         }
         file_counter += 1;
     }
     if matches!(parsed_args.output_format, OutputFormat::GeoParquet) {
-        let kv_metadata = gpq_encoder
+        let kv_metadata = geoparquet_encoder
             .unwrap()
             .into_keyvalue()
             .expect("Could not create GeoParquet K/V metadata.");

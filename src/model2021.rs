@@ -385,38 +385,36 @@ impl AddressParser2021 {
 
     fn build_record_batch(&mut self) -> RecordBatch {
         match self.output_format {
-            OutputFormat::CSV => {
-                RecordBatch::try_new(
-                    SCHEMA_CSV.clone(),
-                    vec![
-                        Arc::new(self.id_namespace.finish()),
-                        Arc::new(self.uuid.finish()),
-                        Arc::new(self.version.finish()),
-                        Arc::new(self.lifecycle_start_date.finish()),
-                        Arc::new(self.valid_since_date.finish()),
-                        Arc::new(self.valid_to_date.finish()),
-                        Arc::new(self.voivodeship_teryt_id.finish()),
-                        Arc::new(self.voivodeship.finish()),
-                        Arc::new(self.county_teryt_id.finish()),
-                        Arc::new(self.county.finish()),
-                        Arc::new(self.municipality_teryt_id.finish()),
-                        Arc::new(self.municipality.finish()),
-                        Arc::new(self.city_teryt_id.finish()),
-                        Arc::new(self.city.finish()),
-                        Arc::new(self.city_part.finish()),
-                        Arc::new(self.street_teryt_id.finish()),
-                        Arc::new(self.street.finish()),
-                        Arc::new(self.house_number.finish()),
-                        Arc::new(self.postcode.finish()),
-                        Arc::new(self.status.finish()),
-                        Arc::new(self.x_epsg_2180.finish()),
-                        Arc::new(self.y_epsg_2180.finish()),
-                        Arc::new(self.longitude.finish()),
-                        Arc::new(self.latitude.finish()),
-                    ],
-                )
-                .expect("Failed to create RecordBatch")
-            }
+            OutputFormat::CSV => RecordBatch::try_new(
+                SCHEMA_CSV.clone(),
+                vec![
+                    Arc::new(self.id_namespace.finish()),
+                    Arc::new(self.uuid.finish()),
+                    Arc::new(self.version.finish()),
+                    Arc::new(self.lifecycle_start_date.finish()),
+                    Arc::new(self.valid_since_date.finish()),
+                    Arc::new(self.valid_to_date.finish()),
+                    Arc::new(self.voivodeship_teryt_id.finish()),
+                    Arc::new(self.voivodeship.finish()),
+                    Arc::new(self.county_teryt_id.finish()),
+                    Arc::new(self.county.finish()),
+                    Arc::new(self.municipality_teryt_id.finish()),
+                    Arc::new(self.municipality.finish()),
+                    Arc::new(self.city_teryt_id.finish()),
+                    Arc::new(self.city.finish()),
+                    Arc::new(self.city_part.finish()),
+                    Arc::new(self.street_teryt_id.finish()),
+                    Arc::new(self.street.finish()),
+                    Arc::new(self.house_number.finish()),
+                    Arc::new(self.postcode.finish()),
+                    Arc::new(self.status.finish()),
+                    Arc::new(self.x_epsg_2180.finish()),
+                    Arc::new(self.y_epsg_2180.finish()),
+                    Arc::new(self.longitude.finish()),
+                    Arc::new(self.latitude.finish()),
+                ],
+            )
+            .expect("Failed to create RecordBatch"),
             OutputFormat::GeoParquet => {
                 let iter = self.geometry.iter().map(Option::as_ref);
                 let geometry_array =
@@ -721,14 +719,16 @@ impl Iterator for AddressParser2021 {
         // main loop that catches events when new object starts
         loop {
             match self.reader.read_event_into(&mut buffer) {
-                Ok(Event::Start(ref e)) => if e.name().as_ref() == ADDRESS_TAG {
-                    row_count += 1;
-                    self.parse_address();
-                    if row_count == self.batch_size {
-                        let record_batch = self.build_record_batch();
-                        return Some(record_batch);
+                Ok(Event::Start(ref e)) => {
+                    if e.name().as_ref() == ADDRESS_TAG {
+                        row_count += 1;
+                        self.parse_address();
+                        if row_count == self.batch_size {
+                            let record_batch = self.build_record_batch();
+                            return Some(record_batch);
+                        }
                     }
-                },
+                }
                 Ok(Event::Eof) => break, // exits the loop when reaching end of file
                 Err(e) => panic!(
                     "Error at position {}: {:?}",
