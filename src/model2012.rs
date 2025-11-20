@@ -223,7 +223,6 @@ pub struct AddressParser2012 {
     batch_size: usize,
     additional_info: HashMap<String, AdditionalInfo>,
     output_format: OutputFormat,
-    count: usize,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
     version: TimestampMillisecondBuilder,
@@ -263,7 +262,6 @@ impl AddressParser2012 {
             batch_size: batch_size,
             additional_info: additional_info,
             output_format: output_format,
-            count: 0,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
             version: TimestampMillisecondBuilder::with_capacity(batch_size)
@@ -663,16 +661,16 @@ impl Iterator for AddressParser2012 {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut buffer = Vec::new();
+        let mut row_count: usize = 0;
         // main loop that catches events when new object starts
         loop {
             match self.reader.read_event_into(&mut buffer) {
                 Ok(Event::Start(ref e)) => match e.name().as_ref() {
                     ADDRESS_TAG => {
-                        self.count += 1;
+                        row_count += 1;
                         self.parse_address();
-                        if self.count == self.batch_size {
+                        if row_count == self.batch_size {
                             let record_batch = self.build_record_batch();
-                            self.count = 0;
                             return Some(record_batch);
                         }
                     }
