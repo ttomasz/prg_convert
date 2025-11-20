@@ -98,29 +98,26 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
     println!("  Output file format: {}", parsed_args.output_format);
     println!("  Schema version: {}", parsed_args.schema_version);
     println!("  Batch size: {}", parsed_args.batch_size);
-    match parsed_args.output_format {
-        OutputFormat::GeoParquet => {
-            println!("  Parquet compression: {}", parsed_args.parquet_compression);
-            if parsed_args.compression_level.is_some() {
-                println!(
-                    "  Compression level: {}",
-                    parsed_args.compression_level.unwrap()
-                );
-            }
+    if let OutputFormat::GeoParquet = parsed_args.output_format {
+        println!("  Parquet compression: {}", parsed_args.parquet_compression);
+        if parsed_args.compression_level.is_some() {
             println!(
-                "  Parquet max row group size: {}",
-                parsed_args.parquet_row_group_size
+                "  Compression level: {}",
+                parsed_args.compression_level.unwrap()
             );
-            match parsed_args.parquet_version {
-                WriterVersion::PARQUET_1_0 => {
-                    println!("  Parquet file format version: v1")
-                }
-                WriterVersion::PARQUET_2_0 => {
-                    println!("  Parquet file format version: v2")
-                }
-            };
         }
-        _ => {}
+        println!(
+            "  Parquet max row group size: {}",
+            parsed_args.parquet_row_group_size
+        );
+        match parsed_args.parquet_version {
+            WriterVersion::PARQUET_1_0 => {
+                println!("  Parquet file format version: v1")
+            }
+            WriterVersion::PARQUET_2_0 => {
+                println!("  Parquet file format version: v2")
+            }
+        };
     };
     println!("----------------------------------------");
 }

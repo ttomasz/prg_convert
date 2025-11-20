@@ -60,7 +60,7 @@ fn main() -> Result<()> {
 
     let num_files_to_process = &parsed_args.parsed_paths.len();
     for path in &parsed_args.parsed_paths {
-        let input_file_metadata = std::fs::metadata(&path)
+        let input_file_metadata = std::fs::metadata(path)
             .with_context(|| format!("could not get metadata for file `{}`", &path.display()))?;
         if input_file_metadata.is_dir() {
             anyhow::bail!(
@@ -82,7 +82,7 @@ fn main() -> Result<()> {
         match parsed_args.schema_version {
             SchemaVersion::Model2012 => {
                 get_address_parser_2012(
-                    &path,
+                    path,
                     &parsed_args.batch_size,
                     &parsed_args.output_format,
                     file_counter == 1,
@@ -117,7 +117,7 @@ fn main() -> Result<()> {
             }
             SchemaVersion::Model2021 => {
                 get_address_parser_2021(
-                    &path,
+                    path,
                     &parsed_args.batch_size,
                     &parsed_args.output_format,
                     file_counter == 1,

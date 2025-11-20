@@ -26,7 +26,7 @@ use crate::get_attribute;
 use crate::option_append_value_or_null;
 use crate::parse_gml_pos;
 use crate::str_append_value_or_null;
-use crate::terc::TERC;
+use crate::terc::Terc;
 
 const CITY_TAG: &[u8] = b"prgad:AD_Miejscowosc";
 const STREET_TAG: &[u8] = b"prgad:AD_UlicaPlac";
@@ -311,7 +311,7 @@ pub struct AddressParser2021 {
     batch_size: usize,
     output_format: OutputFormat,
     mappings: Mappings,
-    teryt_names: HashMap<String, TERC>,
+    teryt_names: HashMap<String, Terc>,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
     version: TimestampMillisecondBuilder,
@@ -345,7 +345,7 @@ impl AddressParser2021 {
         batch_size: usize,
         output_format: OutputFormat,
         additional_info: Mappings,
-        teryt_names: HashMap<String, TERC>,
+        teryt_names: HashMap<String, Terc>,
     ) -> Self {
         Self {
             reader: reader,
@@ -386,7 +386,7 @@ impl AddressParser2021 {
     fn build_record_batch(&mut self) -> RecordBatch {
         match self.output_format {
             OutputFormat::CSV => {
-                return RecordBatch::try_new(
+                RecordBatch::try_new(
                     SCHEMA_CSV.clone(),
                     vec![
                         Arc::new(self.id_namespace.finish()),
@@ -415,7 +415,7 @@ impl AddressParser2021 {
                         Arc::new(self.latitude.finish()),
                     ],
                 )
-                .expect("Failed to create RecordBatch");
+                .expect("Failed to create RecordBatch")
             }
             OutputFormat::GeoParquet => {
                 let iter = self.geometry.iter().map(Option::as_ref);
@@ -424,7 +424,7 @@ impl AddressParser2021 {
                 // reset geometry buffer before the next iteration
                 // arrow builders reset automatically on .finish() call
                 self.geometry = Vec::with_capacity(self.batch_size);
-                return RecordBatch::try_new(
+                RecordBatch::try_new(
                     SCHEMA_GEOPARQUET.clone(),
                     vec![
                         Arc::new(self.id_namespace.finish()),
@@ -452,7 +452,7 @@ impl AddressParser2021 {
                         Arc::new(geometry_array.to_array_ref()),
                     ],
                 )
-                .expect("Failed to create RecordBatch");
+                .expect("Failed to create RecordBatch")
             }
         }
     }
@@ -551,7 +551,7 @@ impl AddressParser2021 {
                             self.id_namespace.append_value(text_trimmed);
                         }
                         b"prgad:wersjaId" => {
-                            let dt = DateTime::parse_from_rfc3339(&text_trimmed)
+                            let dt = DateTime::parse_from_rfc3339(text_trimmed)
                                 .expect("Failed to parse datetime")
                                 .to_utc();
                             self.version.append_value(dt.timestamp() * 1000);
@@ -578,7 +578,7 @@ impl AddressParser2021 {
                             if text_trimmed.is_empty() {
                                 self.valid_since_date.append_null();
                             } else {
-                                let date = NaiveDate::parse_from_str(&text_trimmed, "%Y-%m-%d")
+                                let date = NaiveDate::parse_from_str(text_trimmed, "%Y-%m-%d")
                                     .expect("Failed to parse date");
                                 self.valid_since_date.append_value(
                                     date.signed_duration_since(EPOCH_DATE).num_days() as i32,
@@ -589,7 +589,7 @@ impl AddressParser2021 {
                             self.house_number.append_value(text_trimmed);
                         }
                         b"prgad:kodPocztowy" => {
-                            str_append_value_or_null(&mut self.postcode, &text_trimmed);
+                            str_append_value_or_null(&mut self.postcode, text_trimmed);
                         }
                         b"gml:pos" => {
                             parse_gml_pos(
@@ -599,7 +599,7 @@ impl AddressParser2021 {
                                 &mut self.x_epsg_2180,
                                 &mut self.y_epsg_2180,
                                 &mut self.geometry,
-                                &mut self.output_format,
+                                &self.output_format,
                             );
                         }
                         _ => {
@@ -721,16 +721,13 @@ impl Iterator for AddressParser2021 {
         // main loop that catches events when new object starts
         loop {
             match self.reader.read_event_into(&mut buffer) {
-                Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                    ADDRESS_TAG => {
-                        row_count += 1;
-                        self.parse_address();
-                        if row_count == self.batch_size {
-                            let record_batch = self.build_record_batch();
-                            return Some(record_batch);
-                        }
+                Ok(Event::Start(ref e)) => if e.name().as_ref() == ADDRESS_TAG {
+                    row_count += 1;
+                    self.parse_address();
+                    if row_count == self.batch_size {
+                        let record_batch = self.build_record_batch();
+                        return Some(record_batch);
                     }
-                    _ => (),
                 },
                 Ok(Event::Eof) => break, // exits the loop when reaching end of file
                 Err(e) => panic!(
@@ -744,9 +741,9 @@ impl Iterator for AddressParser2021 {
         }
         let record_batch = self.build_record_batch();
         if record_batch.num_rows() > 0 {
-            return Some(record_batch);
+            Some(record_batch)
         } else {
-            return None;
+            None
         }
     }
 }

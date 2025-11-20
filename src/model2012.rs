@@ -173,11 +173,11 @@ fn parse_additional_info(
         }
         buffer.clear();
     }
-    return AdditionalInfo {
+    AdditionalInfo {
         typ: typ.unwrap(),
         name: name.unwrap(),
         teryt_id: teryt_id,
-    };
+    }
 }
 
 pub fn build_dictionaries(
@@ -191,19 +191,19 @@ pub fn build_dictionaries(
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
                 ADMINISTRATIVE_UNIT_TAG => {
                     let id = "http://geoportal.gov.pl/PZGIK/dane/".to_string()
-                        + &get_attribute(e, b"gml:id").to_string();
+                        + &get_attribute(e, b"gml:id");
                     let info = parse_additional_info(&mut reader, ADMINISTRATIVE_UNIT_TAG);
                     dict.insert(id, info);
                 }
                 CITY_TAG => {
                     let id = "http://geoportal.gov.pl/PZGIK/dane/".to_string()
-                        + &get_attribute(e, b"gml:id").to_string();
+                        + &get_attribute(e, b"gml:id");
                     let info = parse_additional_info(&mut reader, CITY_TAG);
                     dict.insert(id, info);
                 }
                 STREET_TAG => {
                     let id = "http://geoportal.gov.pl/PZGIK/dane/".to_string()
-                        + &get_attribute(e, b"gml:id").to_string();
+                        + &get_attribute(e, b"gml:id");
                     let info = parse_additional_info(&mut reader, STREET_TAG);
                     dict.insert(id, info);
                 }
@@ -215,7 +215,7 @@ pub fn build_dictionaries(
         }
         buffer.clear();
     }
-    return dict;
+    dict
 }
 
 pub struct AddressParser2012 {
@@ -295,7 +295,7 @@ impl AddressParser2012 {
     fn build_record_batch(&mut self) -> RecordBatch {
         match self.output_format {
             OutputFormat::CSV => {
-                return RecordBatch::try_new(
+                RecordBatch::try_new(
                     SCHEMA_CSV.clone(),
                     vec![
                         Arc::new(self.id_namespace.finish()),
@@ -324,7 +324,7 @@ impl AddressParser2012 {
                         Arc::new(self.latitude.finish()),
                     ],
                 )
-                .expect("Failed to create RecordBatch");
+                .expect("Failed to create RecordBatch")
             }
             OutputFormat::GeoParquet => {
                 let iter = self.geometry.iter().map(Option::as_ref);
@@ -333,7 +333,7 @@ impl AddressParser2012 {
                 // reset geometry buffer before the next iteration
                 // arrow builders reset automatically on .finish() call
                 self.geometry = Vec::with_capacity(self.batch_size);
-                return RecordBatch::try_new(
+                RecordBatch::try_new(
                     SCHEMA_GEOPARQUET.clone(),
                     vec![
                         Arc::new(self.id_namespace.finish()),
@@ -361,7 +361,7 @@ impl AddressParser2012 {
                         Arc::new(geometry_array.to_array_ref()),
                     ],
                 )
-                .expect("Failed to create RecordBatch");
+                .expect("Failed to create RecordBatch")
             }
         }
     }
@@ -458,7 +458,7 @@ impl AddressParser2012 {
                             self.id_namespace.append_value(text_trimmed);
                         }
                         b"bt:wersjaId" => {
-                            let dt = DateTime::parse_from_rfc3339(&text_trimmed)
+                            let dt = DateTime::parse_from_rfc3339(text_trimmed)
                                 .expect("Failed to parse datetime")
                                 .to_utc();
                             self.version.append_value(dt.timestamp() * 1000);
@@ -467,7 +467,7 @@ impl AddressParser2012 {
                             if text_trimmed.is_empty() {
                                 self.lifecycle_start_date.append_null();
                             } else {
-                                let dt = DateTime::parse_from_rfc3339(&text_trimmed)
+                                let dt = DateTime::parse_from_rfc3339(text_trimmed)
                                     .expect("Failed to parse datetime")
                                     .to_utc();
                                 self.lifecycle_start_date
@@ -478,7 +478,7 @@ impl AddressParser2012 {
                             if text_trimmed.is_empty() {
                                 self.valid_since_date.append_null();
                             } else {
-                                let date = NaiveDate::parse_from_str(&text_trimmed, "%Y-%m-%d")
+                                let date = NaiveDate::parse_from_str(text_trimmed, "%Y-%m-%d")
                                     .expect("Failed to parse date");
                                 self.valid_since_date.append_value(
                                     date.signed_duration_since(EPOCH_DATE).num_days() as i32,
@@ -489,7 +489,7 @@ impl AddressParser2012 {
                             if text_trimmed.is_empty() {
                                 self.valid_to_date.append_null();
                             } else {
-                                let date = NaiveDate::parse_from_str(&text_trimmed, "%Y-%m-%d")
+                                let date = NaiveDate::parse_from_str(text_trimmed, "%Y-%m-%d")
                                     .expect("Failed to parse date");
                                 self.valid_to_date.append_value(
                                     date.signed_duration_since(EPOCH_DATE).num_days() as i32,
@@ -521,16 +521,16 @@ impl AddressParser2012 {
                             self.city.append_value(text_trimmed);
                         }
                         b"prg-ad:czescMiejscowosci" => {
-                            str_append_value_or_null(&mut self.city_part, &text_trimmed);
+                            str_append_value_or_null(&mut self.city_part, text_trimmed);
                         }
                         b"prg-ad:ulica" => {
-                            str_append_value_or_null(&mut self.street, &text_trimmed);
+                            str_append_value_or_null(&mut self.street, text_trimmed);
                         }
                         b"prg-ad:numerPorzadkowy" => {
                             self.house_number.append_value(text_trimmed);
                         }
                         b"prg-ad:kodPocztowy" => {
-                            str_append_value_or_null(&mut self.postcode, &text_trimmed);
+                            str_append_value_or_null(&mut self.postcode, text_trimmed);
                         }
                         b"prg-ad:status" => {
                             self.status.append_value(text_trimmed);
@@ -543,7 +543,7 @@ impl AddressParser2012 {
                                 &mut self.x_epsg_2180,
                                 &mut self.y_epsg_2180,
                                 &mut self.geometry,
-                                &mut self.output_format,
+                                &self.output_format,
                             );
                         }
                         _ => {
@@ -665,16 +665,13 @@ impl Iterator for AddressParser2012 {
         // main loop that catches events when new object starts
         loop {
             match self.reader.read_event_into(&mut buffer) {
-                Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                    ADDRESS_TAG => {
-                        row_count += 1;
-                        self.parse_address();
-                        if row_count == self.batch_size {
-                            let record_batch = self.build_record_batch();
-                            return Some(record_batch);
-                        }
+                Ok(Event::Start(ref e)) => if e.name().as_ref() == ADDRESS_TAG {
+                    row_count += 1;
+                    self.parse_address();
+                    if row_count == self.batch_size {
+                        let record_batch = self.build_record_batch();
+                        return Some(record_batch);
                     }
-                    _ => (),
                 },
                 Ok(Event::Eof) => break, // exits the loop when reaching end of file
                 Err(e) => panic!(
@@ -688,9 +685,9 @@ impl Iterator for AddressParser2012 {
         }
         let record_batch = self.build_record_batch();
         if record_batch.num_rows() > 0 {
-            return Some(record_batch);
+            Some(record_batch)
         } else {
-            return None;
+            None
         }
     }
 }

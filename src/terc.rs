@@ -40,7 +40,7 @@ struct Row {
     pub stan_na: String,
 }
 
-pub struct TERC {
+pub struct Terc {
     pub voivodeship_teryt_id: String,
     pub voivodeship_name: String,
     pub county_teryt_id: String,
@@ -50,7 +50,7 @@ pub struct TERC {
 
 pub fn get_terc_mapping(
     reader: std::io::BufReader<std::fs::File>,
-) -> anyhow::Result<HashMap<String, TERC>> {
+) -> anyhow::Result<HashMap<String, Terc>> {
     let mut deserializer = Deserializer::from_reader(reader);
     let teryt = Teryt::deserialize(&mut deserializer)
         .with_context(|| "Could not deserialize teryt dictionary from XML file.")?;
@@ -75,7 +75,7 @@ pub fn get_terc_mapping(
             7 => {
                 mapping.insert(
                     teryt_id.clone(),
-                    TERC {
+                    Terc {
                         voivodeship_teryt_id: row.woj.clone(),
                         voivodeship_name: woj[&row.woj].to_string(),
                         county_teryt_id: teryt_id[..4].to_string(),

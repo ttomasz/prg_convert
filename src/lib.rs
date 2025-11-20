@@ -134,10 +134,10 @@ pub struct Writer {
 }
 
 fn get_xml_reader(path: &PathBuf) -> anyhow::Result<Reader<std::io::BufReader<std::fs::File>>> {
-    let mut reader = Reader::from_file(&path)
+    let mut reader = Reader::from_file(path)
         .with_context(|| format!("could not read XML from file `{}`", &path.to_string_lossy()))?;
     reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
-    return Ok(reader);
+    Ok(reader)
 }
 
 pub fn get_address_parser_2012(
@@ -146,14 +146,14 @@ pub fn get_address_parser_2012(
     output_format: &OutputFormat,
     print_configuration: bool,
 ) -> anyhow::Result<AddressParser2012> {
-    let mut reader = get_xml_reader(&file_path)?;
+    let mut reader = get_xml_reader(file_path)?;
     if print_configuration {
         println!("⚙️  XML reader configuration: {:#?}", reader.config());
         println!("----------------------------------------");
     }
     println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
-    reader = get_xml_reader(&file_path)?;
+    reader = get_xml_reader(file_path)?;
     Ok(AddressParser2012::new(
         reader,
         batch_size.clone(),
