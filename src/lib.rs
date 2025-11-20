@@ -157,8 +157,8 @@ pub fn get_address_parser_2012(
     Ok(AddressParser2012::new(
         reader,
         batch_size.clone(),
-        dict,
         output_format.clone(),
+        dict,
     ))
 }
 

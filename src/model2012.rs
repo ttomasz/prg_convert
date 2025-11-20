@@ -221,8 +221,8 @@ pub fn build_dictionaries(
 pub struct AddressParser2012 {
     reader: Reader<std::io::BufReader<std::fs::File>>,
     batch_size: usize,
-    additional_info: HashMap<String, AdditionalInfo>,
     output_format: OutputFormat,
+    additional_info: HashMap<String, AdditionalInfo>,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
     version: TimestampMillisecondBuilder,
@@ -254,14 +254,14 @@ impl AddressParser2012 {
     pub fn new(
         reader: Reader<std::io::BufReader<std::fs::File>>,
         batch_size: usize,
-        additional_info: HashMap<String, AdditionalInfo>,
         output_format: OutputFormat,
+        additional_info: HashMap<String, AdditionalInfo>,
     ) -> Self {
         Self {
             reader: reader,
             batch_size: batch_size,
-            additional_info: additional_info,
             output_format: output_format,
+            additional_info: additional_info,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
             version: TimestampMillisecondBuilder::with_capacity(batch_size)

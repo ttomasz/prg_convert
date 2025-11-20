@@ -310,7 +310,7 @@ pub struct AddressParser2021 {
     reader: Reader<std::io::BufReader<std::fs::File>>,
     batch_size: usize,
     output_format: OutputFormat,
-    additional_info: Mappings,
+    mappings: Mappings,
     teryt_names: HashMap<String, TERC>,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
@@ -351,7 +351,7 @@ impl AddressParser2021 {
             reader: reader,
             batch_size: batch_size,
             output_format: output_format,
-            additional_info: additional_info,
+            mappings: additional_info,
             teryt_names: teryt_names,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
@@ -477,7 +477,7 @@ impl AddressParser2021 {
                         }
                         b"prgad:miejscowosc" => {
                             let id = &get_attribute(e, b"xlink:href")[1..];
-                            let city = self.additional_info.city.get(id);
+                            let city = self.mappings.city.get(id);
                             match city {
                                 None => {}
                                 Some(c) => {
@@ -515,7 +515,7 @@ impl AddressParser2021 {
                         }
                         b"prgad:ulica2" => {
                             let id = &get_attribute(e, b"xlink:href")[1..];
-                            let street = self.additional_info.street.get(id);
+                            let street = self.mappings.street.get(id);
                             match street {
                                 None => {}
                                 Some(s) => {
