@@ -23,7 +23,7 @@ pub const DEFAULT_BATCH_SIZE: usize = 100_000;
 pub struct RawArgs {
     #[arg(
         long = "input-paths",
-        help = "Input XML file path(s). Can be multiple paths separated with space. Can use glob patterns (e.g. `data/*.xml`).",
+        help = "Input XML or ZIP file path(s). Can be multiple paths separated with space. Can use glob patterns (e.g. `data/*.xml`). If ZIP file path is provided then flag --schema-version will determine which files inside will be read (2012: *.xml, 2021: *.gml).",
         value_delimiter = ' ',
         num_args = 1..,
     )]
@@ -39,7 +39,7 @@ pub struct RawArgs {
     schema_version: String,
     #[arg(
         long = "teryt-path",
-        help = "Path of XML file with teryt dictionary unpacked from archive downloaded from: https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default (TERC, podstawowa). Required for schema 2021."
+        help = "Path of XML file with teryt dictionary unpacked from archive downloaded from: https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default (TERC, podstawowa). Required for --schema-version 2021."
     )]
     teryt_path: Option<std::path::PathBuf>,
     #[arg(

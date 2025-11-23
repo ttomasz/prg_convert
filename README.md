@@ -9,7 +9,7 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 - ✅ Parsowanie XML modelu 2021
 - ✅ Zapis do CSV
 - ✅ Zapis do GeoParquet
-- Odczyt bezpośrednio z pliku ZIP
+- ✅ Odczyt bezpośrednio z pliku ZIP
 - Pasek stanu postępu
 - Optymalizacja ustawień formatu parquet (encodings, bloom filters, etc)
 - Wielowątkowość
@@ -30,5 +30,7 @@ Przykład:
 ```
 
 Flaga `--schema-version` określa czy plik jest w poprzednim formacie (wtedy wartość: `2012`) czy [w nowym](https://www.geoportal.gov.pl/aktualnosci/dane-adresowe-dostepne-do-pobrania-w-nowej-strukturze/) (wtedy wartość: `2021`). Paczka zbiorcza zip zawiera pliki w obu formatach. Obecnie (listopad 2025) stare pliki mają rozszerzenie: `.xml`, a nowe: `.gml` i prefix w nazwie: `NOWE_`.
+
+Jeżeli jako plik wejściowy podasz ścieżkę do paczki ZIP to flag `--schema-version` będzie determinować, które pliki będą czytane (2012: te z rozszerzeniem .xml, 2021: te z rozszerzeniem .gml).
 
 **Uwaga:** Dla `--schema-version 2021` trzeba podać także parametr `--teryt-path` ze ścieżką do pliku xml pobranego ze strony [eTERYT GUSu](https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default) (TERC, podstawowa). W nowym modelu PRG nie ma informacji o nazwach jednostek administracyjnych dlatego potrzebny jest ten dodatkowy plik żeby je dodać.
