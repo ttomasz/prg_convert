@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.5.0] - 2025-11-23
+
+### Added
+
+- prg_convert can now read content of ZIP file directly so you don't need to decompress. It determines which files in the archive to read based on their extensions and `--schema-version` parameter. Schema version 2012 reads files with xml extension, while version 2021 reads file with gml extension.
+
 ## [v0.4.0] - 2025-11-19
 
 ### Added
