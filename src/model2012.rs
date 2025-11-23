@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::sync::Arc;
 
 use arrow::array::ArrayBuilder;
@@ -71,10 +72,7 @@ pub fn construct_full_name_from_parts(
     non_empty_parts.join(" ")
 }
 
-fn parse_additional_info(
-    reader: &mut Reader<std::io::BufReader<std::fs::File>>,
-    tag: &[u8],
-) -> AdditionalInfo {
+fn parse_additional_info<R: BufRead>(reader: &mut Reader<R>, tag: &[u8]) -> AdditionalInfo {
     let mut buffer = Vec::new();
     let mut last_tag = Vec::new();
     let mut typ: Option<KomponentType> = None;
@@ -180,9 +178,7 @@ fn parse_additional_info(
     }
 }
 
-pub fn build_dictionaries(
-    mut reader: Reader<std::io::BufReader<std::fs::File>>,
-) -> HashMap<String, AdditionalInfo> {
+pub fn build_dictionaries<R: BufRead>(mut reader: Reader<R>) -> HashMap<String, AdditionalInfo> {
     let mut dict = HashMap::<String, AdditionalInfo>::new();
     let mut buffer = Vec::new();
     // main loop that catches events when new object starts
@@ -218,8 +214,8 @@ pub fn build_dictionaries(
     dict
 }
 
-pub struct AddressParser2012 {
-    reader: Reader<std::io::BufReader<std::fs::File>>,
+pub struct AddressParser2012<R: BufRead> {
+    reader: Reader<R>,
     batch_size: usize,
     output_format: OutputFormat,
     additional_info: HashMap<String, AdditionalInfo>,
@@ -250,15 +246,15 @@ pub struct AddressParser2012 {
     geometry: Vec<Option<Point>>,
 }
 
-impl AddressParser2012 {
+impl<R: BufRead> AddressParser2012<R> {
     pub fn new(
-        reader: Reader<std::io::BufReader<std::fs::File>>,
+        reader: Reader<R>,
         batch_size: usize,
         output_format: OutputFormat,
         additional_info: HashMap<String, AdditionalInfo>,
     ) -> Self {
         Self {
-            reader: reader,
+            reader,
             batch_size: batch_size,
             output_format: output_format,
             additional_info: additional_info,
@@ -654,7 +650,7 @@ impl AddressParser2012 {
     }
 }
 
-impl Iterator for AddressParser2012 {
+impl<R: BufRead> Iterator for AddressParser2012<R> {
     type Item = arrow::array::RecordBatch;
 
     fn next(&mut self) -> Option<Self::Item> {

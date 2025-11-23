@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::sync::Arc;
 
 use arrow::array::ArrayBuilder;
@@ -145,7 +146,7 @@ pub fn construct_full_name_from_parts(part1: &String, part2: &Option<String>, ty
     non_empty_parts.join(" ")
 }
 
-fn parse_city(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> City {
+fn parse_city<R: BufRead>(reader: &mut Reader<R>) -> City {
     let mut buffer = Vec::new();
     let mut last_tag = Vec::new();
     let mut kind = String::new();
@@ -206,7 +207,7 @@ fn parse_city(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> City {
     }
 }
 
-fn parse_street(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> Street {
+fn parse_street<R: BufRead>(reader: &mut Reader<R>) -> Street {
     let mut buffer = Vec::new();
     let mut last_tag = Vec::new();
     let mut kind = String::new();
@@ -274,7 +275,7 @@ fn parse_street(reader: &mut Reader<std::io::BufReader<std::fs::File>>) -> Stree
     }
 }
 
-pub fn build_dictionaries(mut reader: Reader<std::io::BufReader<std::fs::File>>) -> Mappings {
+pub fn build_dictionaries<R: BufRead>(mut reader: Reader<R>) -> Mappings {
     let mut city_dict = HashMap::<String, City>::new();
     let mut street_dict = HashMap::<String, Street>::new();
     let mut buffer = Vec::new();
@@ -306,8 +307,8 @@ pub fn build_dictionaries(mut reader: Reader<std::io::BufReader<std::fs::File>>)
     }
 }
 
-pub struct AddressParser2021 {
-    reader: Reader<std::io::BufReader<std::fs::File>>,
+pub struct AddressParser2021<R: BufRead> {
+    reader: Reader<R>,
     batch_size: usize,
     output_format: OutputFormat,
     mappings: Mappings,
@@ -339,9 +340,9 @@ pub struct AddressParser2021 {
     geometry: Vec<Option<Point>>,
 }
 
-impl AddressParser2021 {
+impl<R: BufRead> AddressParser2021<R> {
     pub fn new(
-        reader: Reader<std::io::BufReader<std::fs::File>>,
+        reader: Reader<R>,
         batch_size: usize,
         output_format: OutputFormat,
         additional_info: Mappings,
@@ -710,7 +711,7 @@ impl AddressParser2021 {
     }
 }
 
-impl Iterator for AddressParser2021 {
+impl<R: BufRead> Iterator for AddressParser2021<R> {
     type Item = arrow::array::RecordBatch;
 
     fn next(&mut self) -> Option<Self::Item> {

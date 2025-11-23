@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -17,6 +19,8 @@ mod model2012;
 use model2012::AddressParser2012;
 mod model2021;
 use model2021::AddressParser2021;
+use zip::ZipArchive;
+use zip::read::ZipFile;
 
 fn get_attribute<'a>(
     event_start: &'a quick_xml::events::BytesStart<'_>,
@@ -114,6 +118,21 @@ impl std::fmt::Display for OutputFormat {
     }
 }
 
+#[derive(Clone)]
+pub enum FileType {
+    XML,
+    ZIP,
+}
+
+impl std::fmt::Display for FileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            FileType::XML => write!(f, "XML"),
+            FileType::ZIP => write!(f, "ZIP"),
+        }
+    }
+}
+
 pub enum SchemaVersion {
     Model2012,
     Model2021,
@@ -133,27 +152,24 @@ pub struct Writer {
     pub geoparquet: Option<parquet::arrow::arrow_writer::ArrowWriter<std::fs::File>>,
 }
 
-fn get_xml_reader(path: &PathBuf) -> anyhow::Result<Reader<std::io::BufReader<std::fs::File>>> {
+fn get_xml_reader_from_uncompressed_file(
+    path: &PathBuf,
+) -> anyhow::Result<Reader<BufReader<File>>> {
     let mut reader = Reader::from_file(path)
-        .with_context(|| format!("could not read XML from file `{}`", &path.to_string_lossy()))?;
+        .with_context(|| format!("Failed to open file: `{}`.", &path.display()))?;
     reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
     Ok(reader)
 }
 
-pub fn get_address_parser_2012(
+pub fn get_address_parser_2012_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
     output_format: &OutputFormat,
-    print_configuration: bool,
-) -> anyhow::Result<AddressParser2012> {
-    let mut reader = get_xml_reader(file_path)?;
-    if print_configuration {
-        println!("⚙️  XML reader configuration: {:#?}", reader.config());
-        println!("----------------------------------------");
-    }
+) -> anyhow::Result<AddressParser2012<std::io::BufReader<File>>> {
+    let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
-    reader = get_xml_reader(file_path)?;
+    reader = get_xml_reader_from_uncompressed_file(file_path)?;
     Ok(AddressParser2012::new(
         reader,
         batch_size.clone(),
@@ -162,29 +178,97 @@ pub fn get_address_parser_2012(
     ))
 }
 
-pub fn get_address_parser_2021(
+pub fn get_address_parser_2012_zip<'a>(
+    archive: &'a mut ZipArchive<File>,
+    batch_size: &usize,
+    output_format: &OutputFormat,
+    zip_file_index: usize,
+) -> anyhow::Result<AddressParser2012<std::io::BufReader<ZipFile<'a, File>>>> {
+    let zip_file = archive
+        .by_index(zip_file_index)
+        .with_context(|| "Could not decompress file from ZIP archive.")?;
+    let buf_reader = BufReader::new(zip_file);
+    let mut reader = Reader::from_reader(buf_reader);
+    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+
+    println!("Building dictionaries...");
+    let dict = model2012::build_dictionaries(reader);
+
+    let zip_file = archive
+        .by_index(zip_file_index)
+        .with_context(|| "Could not decompress file from ZIP archive.")?;
+    let buf_reader = BufReader::new(zip_file);
+    let mut reader = Reader::from_reader(buf_reader);
+    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+
+    Ok(AddressParser2012::new(
+        reader,
+        batch_size.clone(),
+        output_format.clone(),
+        dict,
+    ))
+}
+
+pub fn get_address_parser_2021_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
     output_format: &OutputFormat,
-    print_configuration: bool,
     teryt_file_path: &PathBuf,
-) -> anyhow::Result<AddressParser2021> {
+) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
     let teryt_file = std::fs::File::open(teryt_file_path).with_context(|| {
         format!(
             "could not open file `{}`",
             &teryt_file_path.to_string_lossy()
         )
     })?;
-    let teryt_reader = std::io::BufReader::new(teryt_file);
+    let teryt_reader = BufReader::new(teryt_file);
     let teryt_mapping = get_terc_mapping(teryt_reader)?;
-    let mut reader = get_xml_reader(&file_path)?;
-    if print_configuration {
-        println!("⚙️  XML reader configuration: {:#?}", reader.config());
-        println!("----------------------------------------");
-    }
+    let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
-    reader = get_xml_reader(&file_path)?;
+    reader = get_xml_reader_from_uncompressed_file(file_path)?;
+    Ok(AddressParser2021::new(
+        reader,
+        batch_size.clone(),
+        output_format.clone(),
+        dict,
+        teryt_mapping,
+    ))
+}
+
+pub fn get_address_parser_2021_zip<'a>(
+    archive: &'a mut ZipArchive<File>,
+    batch_size: &usize,
+    output_format: &OutputFormat,
+    teryt_file_path: &PathBuf,
+    zip_file_index: usize,
+) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
+    let teryt_file = std::fs::File::open(teryt_file_path).with_context(|| {
+        format!(
+            "could not open file `{}`",
+            &teryt_file_path.to_string_lossy()
+        )
+    })?;
+    let teryt_reader = BufReader::new(teryt_file);
+    let teryt_mapping = get_terc_mapping(teryt_reader)?;
+
+    let zip_file = archive
+        .by_index(zip_file_index)
+        .with_context(|| "Could not decompress file from ZIP archive.")?;
+    let buf_reader = BufReader::new(zip_file);
+    let mut reader = Reader::from_reader(buf_reader);
+    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+
+    println!("Building dictionaries...");
+    let dict = model2021::build_dictionaries(reader);
+
+    let zip_file = archive
+        .by_index(zip_file_index)
+        .with_context(|| "Could not decompress file from ZIP archive.")?;
+    let buf_reader = BufReader::new(zip_file);
+    let mut reader = Reader::from_reader(buf_reader);
+    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+
     Ok(AddressParser2021::new(
         reader,
         batch_size.clone(),

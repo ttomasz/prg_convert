@@ -1,17 +1,21 @@
 use std::convert::TryInto;
+use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anyhow::Context;
 use glob::glob;
 use parquet::basic::BrotliLevel;
 use parquet::basic::Compression;
 use parquet::basic::ZstdLevel;
 use parquet::file::properties::WriterVersion;
 
+use prg_convert::FileType;
 use prg_convert::OutputFormat;
 use prg_convert::SCHEMA_CSV;
 use prg_convert::SCHEMA_GEOPARQUET;
 use prg_convert::SchemaVersion;
+use zip::ZipArchive;
 
 pub const DEFAULT_BATCH_SIZE: usize = 100_000;
 
@@ -65,9 +69,106 @@ pub struct RawArgs {
     parquet_version: Option<String>,
 }
 
+pub struct CompressedFile {
+    pub index: usize,
+    pub name: String,
+    pub compressed_size: u64,
+    pub uncompressed_size: u64,
+    pub to_be_parsed: bool,
+}
+
+pub struct FileRecord {
+    pub file_type: FileType,
+    pub path: PathBuf,
+    pub size_in_bytes: u64,
+    pub compressed_files: Option<Vec<CompressedFile>>, // only for FileType::ZIP
+    pub decompressed_size: Option<u128>,               // only for FileType::ZIP
+}
+
+fn parse_input_paths(
+    input_paths: &Vec<String>,
+    schema_version: &SchemaVersion,
+) -> anyhow::Result<Vec<FileRecord>> {
+    let mut paths: Vec<FileRecord> = Vec::new();
+    for raw_path in input_paths {
+        let globbed_paths = glob(&raw_path)
+            .with_context(|| format!("Failed to parse glob pattern: `{}`", &raw_path))?;
+        for potential_path in globbed_paths {
+            let path = potential_path?;
+            let file_metadata = std::fs::metadata(&path).with_context(|| {
+                format!("could not get metadata for file `{}`", &path.display())
+            })?;
+            if file_metadata.is_dir() {
+                anyhow::bail!(
+                    "input path `{}` is a directory, expected a file",
+                    &path.display()
+                );
+            }
+            let file_type = match path
+                .extension()
+                .expect("Could not read file extension.")
+                .to_string_lossy()
+                .to_lowercase()
+                .as_str()
+            {
+                "zip" => FileType::ZIP,
+                "xml" | "gml" => FileType::XML,
+                _ => {
+                    anyhow::bail!("File extension not one of: zip, xml, gml.")
+                }
+            };
+            let mut compressed_files = None;
+            let mut decompressed_size = None;
+            if let FileType::ZIP = file_type {
+                let mut cf: Vec<CompressedFile> = Vec::new();
+                let f = File::open(&path)
+                    .with_context(|| format!("Failed to open ZIP file: `{}`.", &path.display()))?;
+                let mut archive = ZipArchive::new(f).with_context(|| {
+                    format!("Failed to decompress ZIP file: `{}`.", &path.display())
+                })?;
+                decompressed_size = archive.decompressed_size();
+                for idx in 0..archive.len() {
+                    let entry = archive
+                        .by_index(idx)
+                        .with_context(|| "Could not access file inside ZIP archive")?;
+                    let name = entry
+                        .enclosed_name()
+                        .with_context(|| "Could not read file name inside ZIP archive.")?;
+                    // for now we'll determine if the file inside zip should be processed based on extension
+                    let file_extension = &name
+                        .extension()
+                        .expect("Could not read file extension.")
+                        .to_string_lossy()
+                        .to_lowercase();
+                    let to_be_parsed = match schema_version {
+                        SchemaVersion::Model2012 => file_extension == "xml",
+                        SchemaVersion::Model2021 => file_extension == "gml",
+                    };
+                    cf.push(CompressedFile {
+                        index: idx,
+                        name: name.to_string_lossy().to_string(),
+                        compressed_size: entry.compressed_size(),
+                        uncompressed_size: entry.size(),
+                        to_be_parsed: to_be_parsed,
+                    });
+                }
+                compressed_files = Some(cf);
+            }
+            paths.push(FileRecord {
+                file_type: file_type,
+                path: path,
+                size_in_bytes: file_metadata.len(),
+                compressed_files: compressed_files,
+                decompressed_size,
+            });
+        }
+    }
+    Ok(paths)
+}
+
 pub struct ParsedArgs {
     pub input_paths: Vec<String>,
-    pub parsed_paths: Vec<PathBuf>,
+    pub parsed_paths: Vec<FileRecord>,
     pub output_path: PathBuf,
     pub teryt_path: Option<std::path::PathBuf>,
     pub batch_size: usize,
@@ -82,17 +183,47 @@ pub struct ParsedArgs {
 
 pub fn print_parsed_args(parsed_args: &ParsedArgs) {
     println!("⚙️  Parameters:");
-    if parsed_args.parsed_paths.len() == 1 {
-        println!("  Input file: {}", &parsed_args.parsed_paths[0].display());
-    } else {
-        println!(
-            "  Input patterns: {}",
-            &parsed_args.input_paths.clone().join(" ")
-        );
-        println!("  Input files:");
-        for path in &parsed_args.parsed_paths {
-            println!("    - {}", path.display());
-        }
+    println!("  Input paths/patterns:");
+    for path in &parsed_args.input_paths {
+        println!("    - {}", path);
+    }
+    println!("  Input:");
+    for file in &parsed_args.parsed_paths {
+        match file.file_type {
+            FileType::XML => {
+                println!(
+                    "    - {} (XML), size: {:.2} MB",
+                    file.path.display(),
+                    (file.size_in_bytes as f64 / 1024.0 / 1024.0)
+                );
+            }
+            FileType::ZIP => {
+                println!(
+                    "    - {} (ZIP), size compressed: {:.2} MB, size uncompressed: {:.2} MB",
+                    file.path.display(),
+                    (file.size_in_bytes as f64 / 1024.0 / 1024.0),
+                    (file.decompressed_size.unwrap() as f64 / 1024.0 / 1024.0)
+                );
+                let compressed_files = file
+                    .compressed_files
+                    .as_ref()
+                    .expect("No files inside ZIP.");
+                for compressed_file in compressed_files {
+                    let status_emoji = match compressed_file.to_be_parsed {
+                        true => "✅",
+                        false => "⛔️",
+                    };
+                    println!(
+                        "        - {} idx: {}, {}, size compressed: {:.2} MB, size uncompressed: {:.2} MB",
+                        status_emoji,
+                        compressed_file.index,
+                        compressed_file.name,
+                        (compressed_file.compressed_size as f64 / 1024.0 / 1024.0),
+                        (compressed_file.uncompressed_size as f64 / 1024.0 / 1024.0)
+                    );
+                }
+            }
+        };
     }
     println!("  Output file: {}", parsed_args.output_path.display());
     println!("  Output file format: {}", parsed_args.output_format);
@@ -183,16 +314,10 @@ impl TryInto<ParsedArgs> for RawArgs {
                 )
             }
         };
-        let paths: Vec<PathBuf> = self
-            .input_paths
-            .clone()
-            .into_iter()
-            .flat_map(|p| glob(&p).expect("Failed to parse glob pattern."))
-            .map(|p| p.expect("Failed to read path."))
-            .collect();
+        let paths = parse_input_paths(&self.input_paths, &schema_version);
         Ok(ParsedArgs {
             input_paths: self.input_paths,
-            parsed_paths: paths,
+            parsed_paths: paths?,
             output_path: self.output_path,
             teryt_path: self.teryt_path,
             batch_size: batch_size,

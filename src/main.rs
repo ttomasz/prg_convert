@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use arrow::{array::RecordBatch, csv::writer::WriterBuilder};
 use clap::Parser;
@@ -6,8 +8,12 @@ use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperti
 
 mod cli;
 use prg_convert::{
-    OutputFormat, SchemaVersion, Writer, get_address_parser_2012, get_address_parser_2021,
+    FileType, OutputFormat, SchemaVersion, Writer, get_address_parser_2012_uncompressed,
+    get_address_parser_2012_zip, get_address_parser_2021_uncompressed, get_address_parser_2021_zip,
 };
+use zip::ZipArchive;
+
+use crate::cli::CompressedFile;
 
 fn write_batch(
     output_format: &OutputFormat,
@@ -38,6 +44,102 @@ fn write_batch(
                 .expect("Failed to write batch.");
         }
     }
+}
+
+fn parse_file(
+    file_type: &FileType,
+    parsed_args: &cli::ParsedArgs,
+    file_path: &PathBuf,
+    mut writer: &mut Writer,
+    mut geoparquet_encoder: &mut Option<GeoParquetRecordBatchEncoder>,
+    zip_file_index: &Option<usize>,
+) -> anyhow::Result<usize> {
+    let mut processed_rows = 0;
+    match (&file_type, &parsed_args.schema_version) {
+        (FileType::XML, SchemaVersion::Model2012) => {
+            get_address_parser_2012_uncompressed(
+                &file_path,
+                &parsed_args.batch_size,
+                &parsed_args.output_format,
+            )?
+            .for_each(|batch| {
+                processed_rows += batch.num_rows();
+                println!("Read batch of {} addresses.", batch.num_rows());
+                write_batch(
+                    &parsed_args.output_format,
+                    &mut writer,
+                    &mut geoparquet_encoder,
+                    batch,
+                );
+            });
+        }
+        (FileType::ZIP, SchemaVersion::Model2012) => {
+            let f = std::fs::File::open(&file_path)
+                .with_context(|| format!("Failed to open file: `{}`.", &file_path.display()))?;
+            let mut archive = ZipArchive::new(f).with_context(|| {
+                format!("Failed to decompress ZIP file: `{}`.", &file_path.display())
+            })?;
+            get_address_parser_2012_zip(
+                &mut archive,
+                &parsed_args.batch_size,
+                &parsed_args.output_format,
+                zip_file_index.unwrap(),
+            )?
+            .for_each(|batch| {
+                processed_rows += batch.num_rows();
+                println!("Read batch of {} addresses.", batch.num_rows());
+                write_batch(
+                    &parsed_args.output_format,
+                    &mut writer,
+                    &mut geoparquet_encoder,
+                    batch,
+                );
+            });
+        }
+        (FileType::XML, SchemaVersion::Model2021) => {
+            get_address_parser_2021_uncompressed(
+                &file_path,
+                &parsed_args.batch_size,
+                &parsed_args.output_format,
+                &parsed_args.teryt_path.as_ref().unwrap(),
+            )?
+            .for_each(|batch| {
+                processed_rows += batch.num_rows();
+                println!("Read batch of {} addresses.", batch.num_rows());
+                write_batch(
+                    &parsed_args.output_format,
+                    &mut writer,
+                    &mut geoparquet_encoder,
+                    batch,
+                );
+            });
+        }
+        (FileType::ZIP, SchemaVersion::Model2021) => {
+            let f = std::fs::File::open(&file_path)
+                .with_context(|| format!("Failed to open file: `{}`.", &file_path.display()))?;
+            let mut archive = ZipArchive::new(f).with_context(|| {
+                format!("Failed to decompress ZIP file: `{}`.", &file_path.display())
+            })?;
+            get_address_parser_2021_zip(
+                &mut archive,
+                &parsed_args.batch_size,
+                &parsed_args.output_format,
+                &parsed_args.teryt_path.as_ref().unwrap(),
+                zip_file_index.unwrap(),
+            )?
+            .for_each(|batch| {
+                processed_rows += batch.num_rows();
+                println!("Read batch of {} addresses.", batch.num_rows());
+                write_batch(
+                    &parsed_args.output_format,
+                    &mut writer,
+                    &mut geoparquet_encoder,
+                    batch,
+                );
+            });
+        }
+    }
+    Ok(processed_rows)
 }
 
 fn main() -> Result<()> {
@@ -90,65 +192,53 @@ fn main() -> Result<()> {
     };
 
     let num_files_to_process = &parsed_args.parsed_paths.len();
-    for path in &parsed_args.parsed_paths {
-        let input_file_metadata = std::fs::metadata(path)
-            .with_context(|| format!("could not get metadata for file `{}`", &path.display()))?;
-        if input_file_metadata.is_dir() {
-            anyhow::bail!(
-                "input path `{}` is a directory, expected a file",
-                &path.display()
-            );
-        }
-        let input_file_size = input_file_metadata.len();
-        total_file_size += &input_file_size;
+    for file in &parsed_args.parsed_paths {
+        total_file_size += &file.size_in_bytes;
 
         println!(
-            "🪓 Processing file ({}/{}): `{}`, size: {:.2}MB.",
+            "🪓 Processing file ({}/{})({}): `{}`, size: {:.2}MB.",
             &file_counter,
             &num_files_to_process,
-            &path.display(),
-            (input_file_size as f64 / 1024.0 / 1024.0)
+            &file.file_type,
+            &file.path.display(),
+            (file.size_in_bytes as f64 / 1024.0 / 1024.0)
         );
         println!("Parsing data...");
-        match parsed_args.schema_version {
-            SchemaVersion::Model2012 => {
-                get_address_parser_2012(
-                    path,
-                    &parsed_args.batch_size,
-                    &parsed_args.output_format,
-                    file_counter == 1,
-                )?
-                .for_each(|batch| {
-                    total_row_count += batch.num_rows();
-                    println!("Read batch of {} addresses.", batch.num_rows());
-                    write_batch(
-                        &parsed_args.output_format,
-                        &mut writer,
-                        &mut geoparquet_encoder,
-                        batch,
-                    );
-                });
+        match file.file_type {
+            FileType::XML => {
+                let processed_rows = parse_file(
+                    &file.file_type,
+                    &parsed_args,
+                    &file.path,
+                    &mut writer,
+                    &mut geoparquet_encoder,
+                    &None,
+                )?;
+                total_row_count += processed_rows;
             }
-            SchemaVersion::Model2021 => {
-                get_address_parser_2021(
-                    path,
-                    &parsed_args.batch_size,
-                    &parsed_args.output_format,
-                    file_counter == 1,
-                    &parsed_args.teryt_path.clone().unwrap(),
-                )?
-                .for_each(|batch| {
-                    total_row_count += batch.num_rows();
-                    println!("Read batch of {} addresses.", batch.num_rows());
-                    write_batch(
-                        &parsed_args.output_format,
+            FileType::ZIP => {
+                let files_to_parse: Vec<&CompressedFile> = file
+                    .compressed_files
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .filter(|f| f.to_be_parsed)
+                    .collect();
+                for compressed_file in files_to_parse {
+                    println!("Decompressing file: {}", compressed_file.name);
+                    let processed_rows = parse_file(
+                        &file.file_type,
+                        &parsed_args,
+                        &file.path,
                         &mut writer,
                         &mut geoparquet_encoder,
-                        batch,
-                    );
-                });
+                        &Some(compressed_file.index),
+                    )?;
+                    total_row_count += processed_rows;
+                }
             }
         }
+
         file_counter += 1;
     }
     if matches!(parsed_args.output_format, OutputFormat::GeoParquet) {
