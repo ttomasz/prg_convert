@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.6.0] - 2025-12-10
+
+### Fixed
+
+- fixed model/schema 2021 reading coordinates in reversed order
+
+### Added
+
+- added cli flag to save geoparquet with geometry either in epsg:2180 crs (original) or epsg:4326 (transformed)
+
 ## [v0.5.0] - 2025-11-23
 
 ### Added
