@@ -602,8 +602,8 @@ impl<R: BufRead> AddressParser2021<R> {
                             str_append_value_or_null(&mut self.postcode, text_trimmed);
                         }
                         b"gml:pos" => {
-                            let coords =
-                                parse_gml_pos(text_trimmed, CoordOrder::XY).expect("Could not parse coordinates.");
+                            let coords = parse_gml_pos(text_trimmed, CoordOrder::XY)
+                                .expect("Could not parse coordinates.");
                             match coords {
                                 None => {
                                     self.longitude.append_null();

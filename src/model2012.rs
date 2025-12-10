@@ -541,8 +541,8 @@ impl<R: BufRead> AddressParser2012<R> {
                             self.status.append_value(text_trimmed);
                         }
                         b"gml:pos" => {
-                            let coords =
-                                parse_gml_pos(text_trimmed, CoordOrder::YX).expect("Could not parse coordinates.");
+                            let coords = parse_gml_pos(text_trimmed, CoordOrder::YX)
+                                .expect("Could not parse coordinates.");
                             match coords {
                                 None => {
                                     self.longitude.append_null();

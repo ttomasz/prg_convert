@@ -369,12 +369,15 @@ pub struct PointCoords {
     pub y2180: f64,
 }
 
-pub fn parse_gml_pos(text_trimmed: &str, coordinate_order: CoordOrder) -> anyhow::Result<Option<PointCoords>> {
+pub fn parse_gml_pos(
+    text_trimmed: &str,
+    coordinate_order: CoordOrder,
+) -> anyhow::Result<Option<PointCoords>> {
     let coords: Vec<&str> = text_trimmed.split_whitespace().collect();
     if coords.len() == 2 {
         let (x, y) = match coordinate_order {
             CoordOrder::XY => (coords[0], coords[1]),
-            CoordOrder::YX => (coords[1], coords[0])
+            CoordOrder::YX => (coords[1], coords[0]),
         };
         let y2180 = y
             .parse::<f64>()
