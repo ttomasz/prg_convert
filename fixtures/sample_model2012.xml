@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<gml:FeatureCollection xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml/3.2"
+    xmlns:bt="urn:gugik:specyfikacje:gmlas:modelPodstawowy:1.0"
+    xmlns:mua="urn:gugik:specyfikacje:gmlas:ewidencjaMiejscowosciUlicAdresow:1.0"
+    xmlns:prg-ad="urn:gugik:specyfikacje:gmlas:panstwowyRejestrGranicAdresy:1.0" gml:id="prg-ad">
+    <gml:featureMembers>
+        <prg-ad:PRG_PunktAdresowy gml:id="PL.ZIPIN.4404.EMUiA_186879d4-02e0-4493-bad2-6108b00316ea">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/186879d4-02e0-4493-bad2-6108b00316ea</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>fd9c9319-0a6a-44b4-972a-1e6c4ec0d4ca</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2022-09-09T18:18:16+02:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2022-09-09T18:18:16Z</bt:poczatekWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2022-09-09</prg-ad:waznyOd>
+            <prg-ad:jednostkaAdmnistracyjna>Polska</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:jednostkaAdmnistracyjna>lubuskie</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:jednostkaAdmnistracyjna>nowosolski</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:jednostkaAdmnistracyjna>Kolsko</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:miejscowosc>Konotop</prg-ad:miejscowosc>
+            <prg-ad:czescMiejscowosci nilReason="inapplicable" xsi:nil="true" />
+            <prg-ad:ulica>Podgórna</prg-ad:ulica>
+            <prg-ad:numerPorzadkowy>2</prg-ad:numerPorzadkowy>
+            <prg-ad:kodPocztowy>67-416</prg-ad:kodPocztowy>
+            <prg-ad:status>istniejacy</prg-ad:status>
+            <prg-ad:pozycja>
+                <gml:Point srsName="urn:ogc:def:crs:EPSG::2180" srsDimension="2"
+                    gml:id="PL.PZGIK.200_fd9c9319-0a6a-44b4-972a-1e6c4ec0d4ca_GEO_1">
+                    <gml:pos>456005.140000001 287772.37</gml:pos>
+                </gml:Point>
+            </prg-ad:pozycja>
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366263" />
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366267" />
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366439" />
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_370095" />
+            <prg-ad:komponent
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA_0910140" />
+            <prg-ad:komponent
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA_95d1f98c-7a1e-4726-a17d-a3c7bdaec79e" />
+            <prg-ad:obiektEMUiA
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/186879d4-02e0-4493-bad2-6108b00316ea" />
+        </prg-ad:PRG_PunktAdresowy>
+        <prg-ad:PRG_PunktAdresowy gml:id="PL.ZIPIN.4404.EMUiA_aeb8b639-a658-41c3-aed4-f9f4cece80e1">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/aeb8b639-a658-41c3-aed4-f9f4cece80e1</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>5baa8bef-75ef-4241-a2fe-9d4137845693</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2017-04-21T11:09:35+02:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2017-04-21T11:09:35Z</bt:poczatekWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2014-03-05</prg-ad:waznyOd>
+            <prg-ad:jednostkaAdmnistracyjna>Polska</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:jednostkaAdmnistracyjna>lubuskie</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:jednostkaAdmnistracyjna>nowosolski</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:jednostkaAdmnistracyjna>Kolsko</prg-ad:jednostkaAdmnistracyjna>
+            <prg-ad:miejscowosc>Konotop</prg-ad:miejscowosc>
+            <prg-ad:czescMiejscowosci nilReason="inapplicable" xsi:nil="true" />
+            <prg-ad:ulica>Podgórna</prg-ad:ulica>
+            <prg-ad:numerPorzadkowy>1</prg-ad:numerPorzadkowy>
+            <prg-ad:kodPocztowy>67-416</prg-ad:kodPocztowy>
+            <prg-ad:status>istniejacy</prg-ad:status>
+            <prg-ad:pozycja>
+                <gml:Point srsName="urn:ogc:def:crs:EPSG::2180" srsDimension="2"
+                    gml:id="PL.PZGIK.200_5baa8bef-75ef-4241-a2fe-9d4137845693_GEO_2">
+                    <gml:pos>456027.7794 287751.0102</gml:pos>
+                </gml:Point>
+            </prg-ad:pozycja>
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366263" />
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366267" />
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366439" />
+            <prg-ad:komponent xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_370095" />
+            <prg-ad:komponent
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA_0910140" />
+            <prg-ad:komponent
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA_95d1f98c-7a1e-4726-a17d-a3c7bdaec79e" />
+            <prg-ad:obiektEMUiA
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/aeb8b639-a658-41c3-aed4-f9f4cece80e1" />
+        </prg-ad:PRG_PunktAdresowy>
+        <prg-ad:PRG_JednostkaAdministracyjnaNazwa gml:id="PL.PZGIK.200_366263">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200/6b3fe3ac-8239-41d6-84a4-cdc91bd0c88e</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>6b3fe3ac-8239-41d6-84a4-cdc91bd0c88e</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2024-02-22T16:19:57+01:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2024-05-22T00:00:00Z</bt:poczatekWersjiObiektu>
+                    <bt:koniecWersjiObiektu>2025-04-24T13:36:06Z</bt:koniecWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2012-06-12</prg-ad:waznyOd>
+            <prg-ad:waznyDo>2025-04-24</prg-ad:waznyDo>
+            <prg-ad:nazwa>POLSKA</prg-ad:nazwa>
+            <prg-ad:idTERYT nilReason="inapplicable" xsi:nil="true" />
+            <prg-ad:poziom>1poziom</prg-ad:poziom>
+            <prg-ad:jednostkaPodzialuTeryt xlink:type="simple" />
+        </prg-ad:PRG_JednostkaAdministracyjnaNazwa>
+        <prg-ad:PRG_JednostkaAdministracyjnaNazwa gml:id="PL.PZGIK.200_366267">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200/42d2335f-bd81-491e-b93c-effe1bcab872</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>42d2335f-bd81-491e-b93c-effe1bcab872</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2024-09-02T14:05:40+02:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2024-09-02T02:05:40Z</bt:poczatekWersjiObiektu>
+                    <bt:koniecWersjiObiektu>2024-11-15T10:07:30Z</bt:koniecWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2012-09-26</prg-ad:waznyOd>
+            <prg-ad:waznyDo>2024-11-15</prg-ad:waznyDo>
+            <prg-ad:nazwa>lubuskie</prg-ad:nazwa>
+            <prg-ad:idTERYT>08</prg-ad:idTERYT>
+            <prg-ad:poziom>2poziom</prg-ad:poziom>
+            <prg-ad:jednostkaPodzialuTeryt xlink:type="simple" />
+        </prg-ad:PRG_JednostkaAdministracyjnaNazwa>
+        <prg-ad:PRG_JednostkaAdministracyjnaNazwa gml:id="PL.PZGIK.200_366439">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200/c93a5582-95a3-42e2-8579-a78f08bea07f</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>c93a5582-95a3-42e2-8579-a78f08bea07f</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2023-12-12T08:53:04+01:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2023-12-12T00:00:00Z</bt:poczatekWersjiObiektu>
+                    <bt:koniecWersjiObiektu>2024-06-27T08:25:24Z</bt:koniecWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2012-09-26</prg-ad:waznyOd>
+            <prg-ad:waznyDo>2024-06-27</prg-ad:waznyDo>
+            <prg-ad:nazwa>powiat nowosolski</prg-ad:nazwa>
+            <prg-ad:idTERYT>0804</prg-ad:idTERYT>
+            <prg-ad:poziom>3poziom</prg-ad:poziom>
+            <prg-ad:jednostkaPodzialuTeryt xlink:type="simple" />
+        </prg-ad:PRG_JednostkaAdministracyjnaNazwa>
+        <prg-ad:PRG_JednostkaAdministracyjnaNazwa gml:id="PL.PZGIK.200_370095">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200/17011d0c-93b2-40b9-8263-c8c826b0c936</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>17011d0c-93b2-40b9-8263-c8c826b0c936</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2012-09-26T22:44:21+02:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2012-09-26T00:00:00Z</bt:poczatekWersjiObiektu>
+                    <bt:koniecWersjiObiektu>2024-06-27T08:25:24Z</bt:koniecWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2012-09-26</prg-ad:waznyOd>
+            <prg-ad:waznyDo>2024-06-27</prg-ad:waznyDo>
+            <prg-ad:nazwa>Kolsko</prg-ad:nazwa>
+            <prg-ad:idTERYT>0804032</prg-ad:idTERYT>
+            <prg-ad:poziom>4poziom</prg-ad:poziom>
+            <prg-ad:jednostkaPodzialuTeryt xlink:type="simple" />
+        </prg-ad:PRG_JednostkaAdministracyjnaNazwa>
+        <prg-ad:PRG_MiejscowoscNazwa gml:id="PL.ZIPIN.4404.EMUiA_0910140">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/0910140</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>80c1afcc-3051-4510-b95e-636166b56395</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2017-04-21T11:08:53+02:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2017-04-21T11:08:53Z</bt:poczatekWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2014-03-05</prg-ad:waznyOd>
+            <prg-ad:nazwa>Konotop</prg-ad:nazwa>
+            <prg-ad:idTERYT>0910140</prg-ad:idTERYT>
+            <prg-ad:pozycja>
+                <gml:Point srsName="urn:ogc:def:crs:EPSG::2180" srsDimension="2"
+                    gml:id="PL.PZGIK.200_80c1afcc-3051-4510-b95e-636166b56395_GEO_201085">
+                    <gml:pos>457017.4738 287516.2157</gml:pos>
+                </gml:Point>
+            </prg-ad:pozycja>
+            <prg-ad:miejscowosc
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/0910140" />
+        </prg-ad:PRG_MiejscowoscNazwa>
+        <prg-ad:PRG_UlicaNazwa gml:id="PL.ZIPIN.4404.EMUiA_95d1f98c-7a1e-4726-a17d-a3c7bdaec79e">
+            <gml:identifier codeSpace="http://geoportal.gov.pl/">
+                http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/95d1f98c-7a1e-4726-a17d-a3c7bdaec79e</gml:identifier>
+            <prg-ad:idIIP>
+                <bt:BT_Identyfikator>
+                    <bt:lokalnyId>21560d96-b007-4012-992a-7107c627e4ec</bt:lokalnyId>
+                    <bt:przestrzenNazw>PL.PZGIK.200</bt:przestrzenNazw>
+                    <bt:wersjaId>2017-04-21T11:08:55+02:00</bt:wersjaId>
+                </bt:BT_Identyfikator>
+            </prg-ad:idIIP>
+            <prg-ad:cyklZycia>
+                <bt:BT_CyklZyciaInfo>
+                    <bt:poczatekWersjiObiektu>2017-04-21T11:08:55Z</bt:poczatekWersjiObiektu>
+                </bt:BT_CyklZyciaInfo>
+            </prg-ad:cyklZycia>
+            <prg-ad:waznyOd>2014-03-05</prg-ad:waznyOd>
+            <prg-ad:nazwa>
+                <mua:AD_NazwaUlicy>
+                    <mua:nazwaGlownaCzesc>Podgórna</mua:nazwaGlownaCzesc>
+                    <mua:idTERYT>16742</mua:idTERYT>
+                </mua:AD_NazwaUlicy>
+            </prg-ad:nazwa>
+            <prg-ad:geometria>
+                <gml:Curve srsName="urn:ogc:def:crs:EPSG::2180" srsDimension="2"
+                    gml:id="IDG_PL.ZIPIN.4404.EMUiA_95d1f98c-7a1e-4726-a17d-a3c7bdaec79e">
+                    <gml:segments>
+                        <gml:LineStringSegment interpolation="linear">
+                            <gml:posList>455587.75 287336.09 455591.140000001 287502.12 455591.66
+                                287688.85 455587.869999999 287750.85 455588.970000001 287756.75
+                                455591.19 287760.44 455594.32 287762.84 455599.119999999 287764.5
+                                455716.220000001 287760.99 455799.949999999 287760.26 455924.06
+                                287757.49 455991.550000001 287754.72 456054.199999999 287756.9 </gml:posList>
+                        </gml:LineStringSegment>
+                    </gml:segments>
+                </gml:Curve>
+            </prg-ad:geometria>
+            <prg-ad:ulica
+                xlink:href="http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA/95d1f98c-7a1e-4726-a17d-a3c7bdaec79e" />
+        </prg-ad:PRG_UlicaNazwa>
+    </gml:featureMembers>
+</gml:FeatureCollection>

@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xmlns:prgad="https://geoportal.gov.pl/schemas/prgad/1.0"
+	xmlns:gmd="http://www.isotc211.org/2005/gmd"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="https://geoportal.gov.pl/schemas/prgad/1.0 https://opendata.geoportal.gov.pl/prg/schemas/prgad/1.0/PRGAD.xsd">
+	<gml:featureMember>
+		<prgad:AD_Miejscowosc gml:id="PL.ZIPIN.2418.EMUiA_0188009_2025-10-14T14_04_04_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>6b96ea4e-3e8c-4fbd-874b-594ee8f21b48</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2025-10-14T14:04:04+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2025-10-14T14:04:04</prgad:poczatekWersjiObiektu>
+			<prgad:nazwa>Żubrów</prgad:nazwa>
+			<prgad:rodzaj>01</prgad:rodzaj>
+			<prgad:identyfikatorSIMC>0188009</prgad:identyfikatorSIMC>
+			<prgad:identyfikatorPRNG />
+			<prgad:georeferencja>
+				<gml:Point srsName="EPSG:2180" srsDimension="2">
+					<gml:pos>238447 516743</gml:pos>
+				</gml:Point>
+			</prgad:georeferencja>
+			<prgad:TERYTGminy>0807043</prgad:TERYTGminy>
+			<prgad:ulica1
+				xlink:href="#PL.ZIPIN.2418.EMUiA_c0a61d0a-afcc-4fc7-91bd-7c2404c5d1c4_2025-10-31T18_54_50_02_00" />
+		</prgad:AD_Miejscowosc>
+	</gml:featureMember>
+	<gml:featureMember>
+		<prgad:AD_Miejscowosc gml:id="PL.ZIPIN.4877.EMUiA_0935682_2025-11-06T15_01_26_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>20d569f1-f442-4359-bddd-b8533e294d90</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2025-11-06T15:01:26+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2025-11-06T15:01:26</prgad:poczatekWersjiObiektu>
+			<prgad:nazwa>Rzepin</prgad:nazwa>
+			<prgad:rodzaj>96</prgad:rodzaj>
+			<prgad:identyfikatorSIMC>0935682</prgad:identyfikatorSIMC>
+			<prgad:identyfikatorPRNG />
+			<prgad:georeferencja>
+				<gml:Point srsName="EPSG:2180" srsDimension="2">
+					<gml:pos>216088 505580</gml:pos>
+				</gml:Point>
+			</prgad:georeferencja>
+			<prgad:TERYTGminy>0805043</prgad:TERYTGminy>
+			<prgad:ulica1
+				xlink:href="#PL.ZIPIN.4877.EMUiA_75927449-9324-4148-b330-01b079a77c61_2025-11-06T15_01_29_02_00" />
+		</prgad:AD_Miejscowosc>
+	</gml:featureMember>
+	<gml:featureMember>
+		<prgad:AD_PunktAdresowy
+			gml:id="PL.ZIPIN.2418.EMUiA_9c0df5e5-f492-4aac-958c-46308d4b4ad1_2025-10-14T14_05_46_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>7343b2d2-c2ac-4951-ae9a-fe1932ffecfb</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2025-10-14T14:05:46+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2025-10-14T14:05:46</prgad:poczatekWersjiObiektu>
+			<prgad:numerPorzadkowy>21A</prgad:numerPorzadkowy>
+			<prgad:georeferencja>
+				<gml:Point srsName="EPSG:2180" srsDimension="2">
+					<gml:pos>238651.83 519741.27</gml:pos>
+				</gml:Point>
+			</prgad:georeferencja>
+			<prgad:kodPocztowy>69-200</prgad:kodPocztowy>
+			<prgad:dataNadania>2012-04-27</prgad:dataNadania>
+			<prgad:miejscowosc xlink:href="#PL.ZIPIN.2418.EMUiA_0188009_2025-10-14T14_04_04_02_00" />
+		</prgad:AD_PunktAdresowy>
+	</gml:featureMember>
+	<gml:featureMember>
+		<prgad:AD_PunktAdresowy
+			gml:id="PL.ZIPIN.4877.EMUiA_55fecd0f-80b5-11eb-a401-e771c31c74f2_2025-11-06T15_02_48_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>07bcb481-4975-4c77-ab58-c8e4b9e05362</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2025-11-06T15:02:48+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2025-11-06T15:02:48</prgad:poczatekWersjiObiektu>
+			<prgad:numerPorzadkowy>1A</prgad:numerPorzadkowy>
+			<prgad:georeferencja>
+				<gml:Point srsName="EPSG:2180" srsDimension="2">
+					<gml:pos>216691.39 505645.69</gml:pos>
+				</gml:Point>
+			</prgad:georeferencja>
+			<prgad:kodPocztowy>69-110</prgad:kodPocztowy>
+			<prgad:dataNadania>2021-03-09</prgad:dataNadania>
+			<prgad:miejscowosc xlink:href="#PL.ZIPIN.4877.EMUiA_0935682_2025-11-06T15_01_26_02_00" />
+			<prgad:ulica2
+				xlink:href="#PL.ZIPIN.4877.EMUiA_75927449-9324-4148-b330-01b079a77c61_2025-11-06T15_01_29_02_00" />
+		</prgad:AD_PunktAdresowy>
+	</gml:featureMember>
+	<gml:featureMember>
+		<prgad:AD_UlicaPlac
+			gml:id="PL.ZIPIN.3122.EMUiA_24ee6a48-8011-42d4-af8e-b048691e2c8c_2017-04-13T15_30_04_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>db91a69d-01d9-410a-ae73-653018f31700</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2017-04-13T15:30:04+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2017-04-13T15:30:04</prgad:poczatekWersjiObiektu>
+			<prgad:geometria>
+				<gml:Polygon srsName="EPSG:2180" srsDimension="2">
+					<gml:exterior>
+						<gml:LinearRing>
+							<gml:posList>245281.43 522942.51 245284.55 522943.68 245300.37 522958.14
+								245283.38 522983.14 245273.42 522980.6 245276.55 522947.4 245278.3
+								522944.66 245281.43 522942.51</gml:posList>
+						</gml:LinearRing>
+					</gml:exterior>
+				</gml:Polygon>
+			</prgad:geometria>
+			<prgad:nazwaPelna>Plac Kasztanowy</prgad:nazwaPelna>
+			<prgad:rodzaj>3</prgad:rodzaj>
+			<prgad:TERYTNazwa1>Plac Kasztanowy</prgad:TERYTNazwa1>
+			<prgad:identyfikatorULIC>08173</prgad:identyfikatorULIC>
+			<prgad:miejsce xlink:href="#PL.ZIPIN.3122.EMUiA_0182969_2017-04-13T15_30_15_02_00" />
+			<prgad:adres2
+				xlink:href="#PL.ZIPIN.3122.EMUiA_4231a7f9-b48a-47fa-ad0e-79810d310410_2017-04-13T15_30_15_02_00" />
+		</prgad:AD_UlicaPlac>
+	</gml:featureMember>
+	<gml:featureMember>
+		<prgad:AD_PunktAdresowy
+			gml:id="PL.ZIPIN.3122.EMUiA_4231a7f9-b48a-47fa-ad0e-79810d310410_2017-04-13T15_30_15_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>e4ed4971-15f6-473d-b9a4-e9e12e602f6e</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2017-04-13T15:30:15+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2017-04-13T15:30:15</prgad:poczatekWersjiObiektu>
+			<prgad:numerPorzadkowy>2A</prgad:numerPorzadkowy>
+			<prgad:georeferencja>
+				<gml:Point srsName="EPSG:2180" srsDimension="2">
+					<gml:pos>245250.11 522957.46</gml:pos>
+				</gml:Point>
+			</prgad:georeferencja>
+			<prgad:kodPocztowy>69-210</prgad:kodPocztowy>
+			<prgad:dataNadania>2012-04-27</prgad:dataNadania>
+			<prgad:miejscowosc xlink:href="#PL.ZIPIN.3122.EMUiA_0182969_2017-04-13T15_30_02_02_00" />
+			<prgad:ulica2
+				xlink:href="#PL.ZIPIN.3122.EMUiA_24ee6a48-8011-42d4-af8e-b048691e2c8c_2017-04-13T15_30_04_02_00" />
+		</prgad:AD_PunktAdresowy>
+	</gml:featureMember>
+	<gml:featureMember>
+		<prgad:AD_Miejscowosc gml:id="PL.ZIPIN.3122.EMUiA_0182969_2017-04-13T15_30_02_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>1978fd96-a012-471a-9ddd-c969d5c5d07d</prgad:lokalnyId>
+					<prgad:przestrzenNazw>PL.PZGIK.200</prgad:przestrzenNazw>
+					<prgad:wersjaId>2017-04-13T15:30:02+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2017-04-13T15:30:02</prgad:poczatekWersjiObiektu>
+			<prgad:nazwa>Lubniewice</prgad:nazwa>
+			<prgad:rodzaj>96</prgad:rodzaj>
+			<prgad:identyfikatorSIMC>0182969</prgad:identyfikatorSIMC>
+			<prgad:identyfikatorPRNG />
+			<prgad:georeferencja>
+				<gml:Point srsName="EPSG:2180" srsDimension="2">
+					<gml:pos>244729.2 523034.56</gml:pos>
+				</gml:Point>
+			</prgad:georeferencja>
+			<prgad:TERYTGminy>0807023</prgad:TERYTGminy>
+			<prgad:ulica1
+				xlink:href="#PL.ZIPIN.3122.EMUiA_24ee6a48-8011-42d4-af8e-b048691e2c8c_2017-04-13T15_30_04_02_00" />
+		</prgad:AD_Miejscowosc>
+	</gml:featureMember>
+</gml:FeatureCollection>

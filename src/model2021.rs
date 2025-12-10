@@ -94,47 +94,45 @@ static STREET_TYPE: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
 
 /// Concatenates parts of the name and the street type.
 /// If name contains shorthand type then we don't replace it with the full type name.
-pub fn construct_full_name_from_parts(part1: &String, part2: &Option<String>, typ: &str) -> String {
-    let str_typ = STREET_TYPE.get(typ).cloned().unwrap_or_default();
-    let prefix = match typ {
-        "3" => {
-            if part1.to_lowercase().starts_with(str_typ) || part1.to_lowercase().starts_with("pl.")
-            {
+pub fn construct_full_name_from_parts(
+    part1: &String,
+    part2: &Option<String>,
+    kind: &str,
+) -> String {
+    let prefix = match kind {
+        "plac" => {
+            if part1.to_lowercase().starts_with(kind) || part1.to_lowercase().starts_with("pl.") {
                 ""
             } else {
-                str_typ
+                kind
             }
         }
-        "11" => {
-            if part1.to_lowercase().starts_with(str_typ) || part1.to_lowercase().starts_with("os.")
-            {
+        "osiedle" => {
+            if part1.to_lowercase().starts_with(kind) || part1.to_lowercase().starts_with("os.") {
                 ""
             } else {
-                str_typ
+                kind
             }
         }
-        "6" => {
-            if part1.to_lowercase().starts_with(str_typ)
-                || part1.to_lowercase().starts_with("rondo")
-            {
+        "rondo" => {
+            if part1.to_lowercase().starts_with(kind) || part1.to_lowercase().starts_with("rondo") {
                 ""
             } else {
-                str_typ
+                kind
             }
         }
-        "2" => {
-            if part1.to_lowercase().starts_with(str_typ) || part1.to_lowercase().starts_with("al.")
-            {
+        "aleja" => {
+            if part1.to_lowercase().starts_with(kind) || part1.to_lowercase().starts_with("al.") {
                 ""
             } else {
-                str_typ
+                kind
             }
         }
         _ => {
-            if part1.to_lowercase().starts_with(str_typ) {
+            if part1.to_lowercase().starts_with(kind) {
                 ""
             } else {
-                str_typ
+                kind
             }
         }
     };
@@ -167,7 +165,7 @@ fn parse_city<R: BufRead>(reader: &mut Reader<R>) -> City {
                 let text_decoded = e.decode().expect("Failed to decode text.");
                 let text_trimmed = text_decoded.trim();
                 match last_tag.as_slice() {
-                    b"prg-ad:nazwa" => {
+                    b"prgad:nazwa" => {
                         name = text_trimmed.to_string();
                     }
                     b"prgad:rodzaj" => {
@@ -212,7 +210,7 @@ fn parse_street<R: BufRead>(reader: &mut Reader<R>) -> Street {
     let mut buffer = Vec::new();
     let mut last_tag = Vec::new();
     let mut kind = String::new();
-    let mut name = String::new();
+    let name;
     let mut teryt_id = None;
     let mut part1 = String::new();
     let mut part2 = None;
@@ -230,7 +228,11 @@ fn parse_street<R: BufRead>(reader: &mut Reader<R>) -> Street {
                 let text_trimmed = text_decoded.trim();
                 match last_tag.as_slice() {
                     b"prgad:rodzaj" => {
-                        kind = text_trimmed.to_owned();
+                        kind = STREET_TYPE
+                            .get(text_trimmed)
+                            .cloned()
+                            .unwrap_or("")
+                            .to_string();
                     }
                     b"prgad:identyfikatorULIC" => {
                         teryt_id = Some(text_trimmed.to_string());
@@ -246,9 +248,7 @@ fn parse_street<R: BufRead>(reader: &mut Reader<R>) -> Street {
                 last_tag.clear();
             }
             Ok(Event::End(ref e)) if e.name().as_ref() == STREET_TAG => {
-                if !kind.is_empty() && !part1.is_empty() {
-                    name = construct_full_name_from_parts(&part1, &part2, &kind);
-                }
+                name = construct_full_name_from_parts(&part1, &part2, &kind);
                 break;
             }
             Ok(Event::Eof) => {
@@ -788,7 +788,7 @@ impl<R: BufRead> Iterator for AddressParser2021<R> {
 
 #[test]
 fn name_from_part1() {
-    let typ = "1";
+    let typ = "";
     let part1 = "Test".to_string();
     let part2 = None;
     let expected_name = "Test";
@@ -797,8 +797,18 @@ fn name_from_part1() {
 }
 
 #[test]
+fn name_from_part1_empty_part2() {
+    let typ = "";
+    let part1 = "Test".to_string();
+    let part2 = Some("".to_string());
+    let expected_name = "Test";
+    let name = construct_full_name_from_parts(&part1, &part2, &typ);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
 fn name_from_part1_part2() {
-    let typ = "1";
+    let typ = "";
     let part1 = "Test".to_string();
     let part2 = Some("Test2".to_string());
     let expected_name = "Test2 Test";
@@ -808,7 +818,7 @@ fn name_from_part1_part2() {
 
 #[test]
 fn name_from_part1_typ_3() {
-    let typ = "3";
+    let typ = "plac";
     let part1 = "Test".to_string();
     let part2 = None;
     let expected_name = "plac Test";
@@ -818,7 +828,7 @@ fn name_from_part1_typ_3() {
 
 #[test]
 fn name_from_part1_part2_typ_3() {
-    let typ = "3";
+    let typ = "plac";
     let part1 = "Test".to_string();
     let part2 = Some("Test2".to_string());
     let expected_name = "plac Test2 Test";
@@ -828,7 +838,7 @@ fn name_from_part1_part2_typ_3() {
 
 #[test]
 fn name_from_part1_typ_3_prefix() {
-    let typ = "3";
+    let typ = "plac";
     let part1 = "plac Test".to_string();
     let part2 = None;
     let expected_name = "plac Test";
@@ -838,10 +848,32 @@ fn name_from_part1_typ_3_prefix() {
 
 #[test]
 fn name_from_part1_typ_3_prefix_short() {
-    let typ = "3";
+    let typ = "plac";
     let part1 = "pl. Test".to_string();
     let part2 = None;
     let expected_name = "pl. Test";
     let name = construct_full_name_from_parts(&part1, &part2, &typ);
     assert_eq!(name, expected_name);
+}
+
+#[test]
+fn test_build_dictionaries() {
+    let sample_file_path = "fixtures/sample_model2021.xml";
+    let mut reader = Reader::from_file(sample_file_path).unwrap();
+    reader.config_mut().expand_empty_elements = true;
+    let dict = build_dictionaries(reader);
+    let city_zubrow = &dict.city["PL.ZIPIN.2418.EMUiA_0188009_2025-10-14T14_04_04_02_00"];
+    let city_rzepin = &dict.city["PL.ZIPIN.4877.EMUiA_0935682_2025-11-06T15_01_26_02_00"];
+    assert_eq!(city_zubrow.municipality_teryt_id, "0807043");
+    assert_eq!(city_zubrow.city_teryt_id, Some("0188009".to_string()));
+    assert_eq!(city_zubrow.kind, "wieś");
+    assert_eq!(city_zubrow.name, "Żubrów");
+    assert_eq!(city_rzepin.municipality_teryt_id, "0805043");
+    assert_eq!(city_rzepin.city_teryt_id, Some("0935682".to_string()));
+    assert_eq!(city_rzepin.kind, "miasto");
+    assert_eq!(city_rzepin.name, "Rzepin");
+    let street = &dict.street["PL.ZIPIN.3122.EMUiA_24ee6a48-8011-42d4-af8e-b048691e2c8c_2017-04-13T15_30_04_02_00"];
+    assert_eq!(street.teryt_id, Some("08173".to_string()));
+    assert_eq!(street.kind, "plac");
+    assert_eq!(street.name, "Plac Kasztanowy");
 }

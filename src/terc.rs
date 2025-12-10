@@ -91,3 +91,18 @@ pub fn get_terc_mapping(
     }
     Ok(mapping)
 }
+
+#[test]
+fn test_get_terc_mapping() {
+    let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.xml";
+    let teryt_file =
+        std::fs::File::open(teryt_file_path).expect("Could not open file with TERYT data.");
+    let teryt_reader = std::io::BufReader::new(teryt_file);
+    let teryt_mapping = crate::terc::get_terc_mapping(teryt_reader).unwrap();
+    let k0201011 = &teryt_mapping["0201011"];
+    assert_eq!(k0201011.municipality_name, "Bolesławiec");
+    assert_eq!(k0201011.county_teryt_id, "0201");
+    assert_eq!(k0201011.county_name, "bolesławiecki");
+    assert_eq!(k0201011.voivodeship_teryt_id, "02");
+    assert_eq!(k0201011.voivodeship_name, "dolnośląskie");
+}
