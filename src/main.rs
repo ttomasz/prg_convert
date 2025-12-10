@@ -61,6 +61,9 @@ fn parse_file(
                 &file_path,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
+                &parsed_args.crs,
+                parsed_args.arrow_schema.clone(),
+                &parsed_args.geoarrow_geom_type,
             )?
             .for_each(|batch| {
                 processed_rows += batch.num_rows();
@@ -84,6 +87,9 @@ fn parse_file(
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
                 zip_file_index.unwrap(),
+                &parsed_args.crs,
+                parsed_args.arrow_schema.clone(),
+                &parsed_args.geoarrow_geom_type,
             )?
             .for_each(|batch| {
                 processed_rows += batch.num_rows();
@@ -102,6 +108,9 @@ fn parse_file(
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
                 &parsed_args.teryt_path.as_ref().unwrap(),
+                &parsed_args.crs,
+                parsed_args.arrow_schema.clone(),
+                &parsed_args.geoarrow_geom_type,
             )?
             .for_each(|batch| {
                 processed_rows += batch.num_rows();
@@ -126,6 +135,9 @@ fn parse_file(
                 &parsed_args.output_format,
                 &parsed_args.teryt_path.as_ref().unwrap(),
                 zip_file_index.unwrap(),
+                &parsed_args.crs,
+                parsed_args.arrow_schema.clone(),
+                &parsed_args.geoarrow_geom_type,
             )?
             .for_each(|batch| {
                 processed_rows += batch.num_rows();
@@ -174,7 +186,7 @@ fn main() -> Result<()> {
                 .set_compression(parsed_args.parquet_compression)
                 .build();
             let gpq_encoder = GeoParquetRecordBatchEncoder::try_new(
-                &parsed_args.schema,
+                &parsed_args.arrow_schema,
                 &GeoParquetWriterOptions::default(),
             )
             .expect("Could not create GeoParquet encoder.");

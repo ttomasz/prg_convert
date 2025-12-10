@@ -8,23 +8,23 @@ use arrow::array::Float64Builder;
 use arrow::array::RecordBatch;
 use arrow::array::StringBuilder;
 use arrow::array::TimestampMillisecondBuilder;
+use arrow::datatypes::Schema;
 use chrono::DateTime;
 use chrono::NaiveDate;
 use geo_types::Point;
 use geoarrow::array::GeoArrowArray;
 use geoarrow::array::PointBuilder;
+use geoarrow::datatypes::PointType;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+use crate::CRS;
 use crate::OutputFormat;
-use crate::constants::EPOCH_DATE;
-use crate::constants::GEOM_TYPE;
-use crate::constants::SCHEMA_CSV;
-use crate::constants::SCHEMA_GEOPARQUET;
-use crate::get_attribute;
-use crate::option_append_value_or_null;
-use crate::parse_gml_pos;
-use crate::str_append_value_or_null;
+use crate::common::EPOCH_DATE;
+use crate::common::get_attribute;
+use crate::common::option_append_value_or_null;
+use crate::common::parse_gml_pos;
+use crate::common::str_append_value_or_null;
 
 const ADDRESS_TAG: &[u8] = b"prg-ad:PRG_PunktAdresowy";
 const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazwa";
@@ -219,6 +219,9 @@ pub struct AddressParser2012<R: BufRead> {
     batch_size: usize,
     output_format: OutputFormat,
     additional_info: HashMap<String, AdditionalInfo>,
+    crs: crate::CRS,
+    geoarrow_geom_type: PointType,
+    arrow_schema: Arc<Schema>,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
     version: TimestampMillisecondBuilder,
@@ -252,12 +255,18 @@ impl<R: BufRead> AddressParser2012<R> {
         batch_size: usize,
         output_format: OutputFormat,
         additional_info: HashMap<String, AdditionalInfo>,
+        crs: crate::CRS,
+        arrow_schema: Arc<Schema>,
+        geoarrow_geom_type: PointType,
     ) -> Self {
         Self {
             reader,
             batch_size: batch_size,
             output_format: output_format,
             additional_info: additional_info,
+            crs: crs,
+            geoarrow_geom_type: geoarrow_geom_type,
+            arrow_schema: arrow_schema,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
             version: TimestampMillisecondBuilder::with_capacity(batch_size)
@@ -291,7 +300,7 @@ impl<R: BufRead> AddressParser2012<R> {
     fn build_record_batch(&mut self) -> RecordBatch {
         match self.output_format {
             OutputFormat::CSV => RecordBatch::try_new(
-                SCHEMA_CSV.clone(),
+                self.arrow_schema.clone(),
                 vec![
                     Arc::new(self.id_namespace.finish()),
                     Arc::new(self.uuid.finish()),
@@ -323,12 +332,13 @@ impl<R: BufRead> AddressParser2012<R> {
             OutputFormat::GeoParquet => {
                 let iter = self.geometry.iter().map(Option::as_ref);
                 let geometry_array =
-                    PointBuilder::from_nullable_points(iter, GEOM_TYPE.clone()).finish();
+                    PointBuilder::from_nullable_points(iter, self.geoarrow_geom_type.clone())
+                        .finish();
                 // reset geometry buffer before the next iteration
                 // arrow builders reset automatically on .finish() call
                 self.geometry = Vec::with_capacity(self.batch_size);
                 RecordBatch::try_new(
-                    SCHEMA_GEOPARQUET.clone(),
+                    self.arrow_schema.clone(),
                     vec![
                         Arc::new(self.id_namespace.finish()),
                         Arc::new(self.uuid.finish()),
@@ -530,15 +540,41 @@ impl<R: BufRead> AddressParser2012<R> {
                             self.status.append_value(text_trimmed);
                         }
                         b"gml:pos" => {
-                            parse_gml_pos(
-                                text_trimmed,
-                                &mut self.longitude,
-                                &mut self.latitude,
-                                &mut self.x_epsg_2180,
-                                &mut self.y_epsg_2180,
-                                &mut self.geometry,
-                                &self.output_format,
-                            );
+                            let coords =
+                                parse_gml_pos(text_trimmed).expect("Could not parse coordinates.");
+                            match coords {
+                                None => {
+                                    self.longitude.append_null();
+                                    self.latitude.append_null();
+                                    match self.output_format {
+                                        OutputFormat::CSV => {
+                                            self.x_epsg_2180.append_null();
+                                            self.y_epsg_2180.append_null();
+                                        }
+                                        OutputFormat::GeoParquet => {
+                                            self.geometry.push(None);
+                                        }
+                                    }
+                                }
+                                Some(coords) => {
+                                    self.longitude.append_value(coords.x4326);
+                                    self.latitude.append_value(coords.y4326);
+                                    match self.output_format {
+                                        OutputFormat::CSV => {
+                                            self.x_epsg_2180.append_value(coords.x2180);
+                                            self.y_epsg_2180.append_value(coords.y2180);
+                                        }
+                                        OutputFormat::GeoParquet => match self.crs {
+                                            CRS::Epsg2180 => {
+                                                self.geometry.push(Some(geo_types::point!(x: coords.x2180, y: coords.y2180)));
+                                            }
+                                            CRS::Epsg4326 => {
+                                                self.geometry.push(Some(geo_types::point!(x: coords.x4326, y: coords.y4326)));
+                                            }
+                                        },
+                                    }
+                                }
+                            }
                         }
                         _ => {
                             println!(

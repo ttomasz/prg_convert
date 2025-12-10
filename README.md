@@ -14,6 +14,9 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 - Optymalizacja ustawień formatu parquet (encodings, bloom filters, etc)
 - Wielowątkowość
 - Python bindings
+- ✅ Opcja zapisu GeoParquet w EPSG:4326
+- Zapis do FlatGeoBuf
+- Zapis do GeoJSON
 
 ## Obsługa
 Pobierz plik zip (Windows) lub tar.gz (Linuks) z zakładki [Releases](https://github.com/ttomasz/prg_convert/releases) i rozpakuj go.

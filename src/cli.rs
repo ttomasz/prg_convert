@@ -4,18 +4,25 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
+use geoarrow::datatypes::CoordType;
+use geoarrow::datatypes::Dimension;
+use geoarrow::datatypes::Metadata;
+use geoarrow::datatypes::PointType;
 use glob::glob;
 use parquet::basic::BrotliLevel;
 use parquet::basic::Compression;
 use parquet::basic::ZstdLevel;
 use parquet::file::properties::WriterVersion;
+use prg_convert::common::CRS_2180;
+use prg_convert::common::CRS_4326;
+use prg_convert::common::SCHEMA_CSV;
+use prg_convert::common::get_geoparquet_schema;
+use zip::ZipArchive;
 
+use prg_convert::CRS;
 use prg_convert::FileType;
 use prg_convert::OutputFormat;
-use prg_convert::SCHEMA_CSV;
-use prg_convert::SCHEMA_GEOPARQUET;
 use prg_convert::SchemaVersion;
-use zip::ZipArchive;
 
 pub const DEFAULT_BATCH_SIZE: usize = 100_000;
 
@@ -67,6 +74,11 @@ pub struct RawArgs {
         help = "(Optional) Version of parquet standard to use (one of: v1, v2,) (default: v2)."
     )]
     parquet_version: Option<String>,
+    #[arg(
+        long = "crs-epsg",
+        help = "(Optional) EPSG code of Coordinate Reference System for geometry data written to geoparquet. One of: 2180, 4326. Default: 2180. Does not affect CSV format which includes coordinates in both."
+    )]
+    crs_epsg: Option<i32>,
 }
 
 pub struct CompressedFile {
@@ -174,11 +186,13 @@ pub struct ParsedArgs {
     pub batch_size: usize,
     pub schema_version: SchemaVersion,
     pub output_format: OutputFormat,
-    pub schema: Arc<arrow::datatypes::Schema>,
+    pub arrow_schema: Arc<arrow::datatypes::Schema>,
     pub compression_level: Option<i32>,
     pub parquet_compression: parquet::basic::Compression,
     pub parquet_row_group_size: usize,
     pub parquet_version: parquet::file::properties::WriterVersion,
+    pub crs: CRS,
+    pub geoarrow_geom_type: PointType,
 }
 
 pub fn print_parsed_args(parsed_args: &ParsedArgs) {
@@ -249,6 +263,7 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
                 println!("  Parquet file format version: v2")
             }
         };
+        println!("  CRS: {}", parsed_args.crs);
     };
     println!("----------------------------------------");
 }
@@ -273,9 +288,9 @@ impl TryInto<ParsedArgs> for RawArgs {
                 );
             }
         };
-        let (output_format, schema) = match self.output_format.to_lowercase().as_str() {
-            "csv" => (OutputFormat::CSV, SCHEMA_CSV.clone()),
-            "geoparquet" => (OutputFormat::GeoParquet, SCHEMA_GEOPARQUET.clone()),
+        let output_format = match self.output_format.to_lowercase().as_str() {
+            "csv" => OutputFormat::CSV,
+            "geoparquet" => OutputFormat::GeoParquet,
             _ => {
                 anyhow::bail!(
                     "unsupported format `{}`, expected one of: csv, geoparquet",
@@ -314,6 +329,27 @@ impl TryInto<ParsedArgs> for RawArgs {
                 )
             }
         };
+        let crs = match &self.crs_epsg {
+            None | Some(2180) => CRS::Epsg2180,
+            Some(4326) => CRS::Epsg4326,
+            _ => {
+                anyhow::bail!(
+                    "Unrecognized EPSG code: `{:?}`. Needs to be one of: 2180, 4326.",
+                    &self.crs_epsg,
+                )
+            }
+        };
+        let geoarrow_crs = match crs {
+            CRS::Epsg2180 => CRS_2180,
+            CRS::Epsg4326 => CRS_4326,
+        };
+        let geoarrow_metadata = Arc::new(Metadata::new(geoarrow_crs.clone(), None));
+        let geom_type = PointType::new(Dimension::XY, geoarrow_metadata.clone())
+            .with_coord_type(CoordType::Separated);
+        let arrow_schema = match output_format {
+            OutputFormat::CSV => SCHEMA_CSV.clone(),
+            OutputFormat::GeoParquet => get_geoparquet_schema(geom_type.clone()),
+        };
         let paths = parse_input_paths(&self.input_paths, &schema_version);
         Ok(ParsedArgs {
             input_paths: self.input_paths,
@@ -323,11 +359,13 @@ impl TryInto<ParsedArgs> for RawArgs {
             batch_size: batch_size,
             schema_version: schema_version,
             output_format: output_format,
-            schema: schema,
+            arrow_schema: arrow_schema,
             compression_level: compression_level,
             parquet_compression: parquet_compression,
             parquet_row_group_size: parquet_row_group_size,
             parquet_version: parquet_version,
+            crs: crs,
+            geoarrow_geom_type: geom_type,
         })
     }
 }
