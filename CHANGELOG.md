@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.1] - 2025-12-11
+
+### Fixed
+
+- fixed model/schema 2021 reading city names
+
 ## [v0.6.0] - 2025-12-10
 
 ### Fixed
