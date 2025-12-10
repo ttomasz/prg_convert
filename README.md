@@ -6,7 +6,7 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 
 ## Status implementacji
 - ✅ Parsowanie XML modelu 2012
-- ✅ Parsowanie XML modelu 2021
+- ✅ Parsowanie XML modelu 2021 (do wersji 0.5.0 koordynaty są czytane w odwróconej kolejności, od wersji 0.6.0 jest poprawnie)
 - ✅ Zapis do CSV
 - ✅ Zapis do GeoParquet
 - ✅ Odczyt bezpośrednio z pliku ZIP

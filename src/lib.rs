@@ -19,6 +19,12 @@ mod model2021;
 use model2021::AddressParser2021;
 
 #[derive(Clone)]
+pub enum CoordOrder {
+    XY,
+    YX,
+}
+
+#[derive(Clone)]
 pub enum OutputFormat {
     CSV,
     GeoParquet,

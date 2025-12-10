@@ -21,6 +21,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use crate::CRS;
+use crate::CoordOrder;
 use crate::OutputFormat;
 use crate::common::EPOCH_DATE;
 use crate::common::get_attribute;
@@ -602,7 +603,7 @@ impl<R: BufRead> AddressParser2021<R> {
                         }
                         b"gml:pos" => {
                             let coords =
-                                parse_gml_pos(text_trimmed).expect("Could not parse coordinates.");
+                                parse_gml_pos(text_trimmed, CoordOrder::XY).expect("Could not parse coordinates.");
                             match coords {
                                 None => {
                                     self.longitude.append_null();

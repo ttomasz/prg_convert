@@ -13,6 +13,8 @@ use geoarrow::datatypes::PointType;
 use once_cell::sync::Lazy;
 use proj4rs::Proj;
 
+use crate::CoordOrder;
+
 pub const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 
 pub static SCHEMA_CSV: Lazy<Arc<Schema>> = Lazy::new(|| {
@@ -367,13 +369,17 @@ pub struct PointCoords {
     pub y2180: f64,
 }
 
-pub fn parse_gml_pos(text_trimmed: &str) -> anyhow::Result<Option<PointCoords>> {
+pub fn parse_gml_pos(text_trimmed: &str, coordinate_order: CoordOrder) -> anyhow::Result<Option<PointCoords>> {
     let coords: Vec<&str> = text_trimmed.split_whitespace().collect();
     if coords.len() == 2 {
-        let y2180 = coords[0]
+        let (x, y) = match coordinate_order {
+            CoordOrder::XY => (coords[0], coords[1]),
+            CoordOrder::YX => (coords[1], coords[0])
+        };
+        let y2180 = y
             .parse::<f64>()
             .with_context(|| format!("Could not parse y2180 out of: `{}`", text_trimmed))?;
-        let x2180 = coords[1]
+        let x2180 = x
             .parse::<f64>()
             .with_context(|| format!("Could not parse x2180 out of: `{}`", text_trimmed))?;
         if x2180.is_nan() || y2180.is_nan() {
@@ -424,27 +430,27 @@ fn test_get_attribute_returns_value() {
 #[test]
 fn test_parse_gml_pos_empty() {
     let gml_pos = "";
-    let coords = parse_gml_pos(gml_pos);
+    let coords = parse_gml_pos(gml_pos, CoordOrder::XY);
     assert!(coords.is_err());
 }
 
 #[test]
 fn test_parse_gml_pos_1() {
     let gml_pos = "0.0";
-    let coords = parse_gml_pos(gml_pos);
+    let coords = parse_gml_pos(gml_pos, CoordOrder::XY);
     assert!(coords.is_err());
 }
 
 #[test]
 fn test_parse_gml_pos_3() {
     let gml_pos = "0.0 1.1 2.2";
-    let coords = parse_gml_pos(gml_pos);
+    let coords = parse_gml_pos(gml_pos, CoordOrder::XY);
     assert!(coords.is_err());
 }
 
 #[test]
 fn test_parse_gml_pos_nan() {
     let gml_pos = "NaN NaN";
-    let coords = parse_gml_pos(gml_pos).expect("NaN should have been parsed.");
+    let coords = parse_gml_pos(gml_pos, CoordOrder::XY).expect("NaN should have been parsed.");
     assert!(coords.is_none());
 }
