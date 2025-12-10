@@ -457,3 +457,23 @@ fn test_parse_gml_pos_nan() {
     let coords = parse_gml_pos(gml_pos, CoordOrder::XY).expect("NaN should have been parsed.");
     assert!(coords.is_none());
 }
+
+#[test]
+fn test_parse_gml_pos_xy() {
+    let gml_pos = "216691.39 505645.69";
+    let coords = parse_gml_pos(gml_pos, CoordOrder::XY).unwrap().unwrap();
+    assert!((coords.x2180 - 216691.39).abs() <= 0.01);
+    assert!((coords.y2180 - 505645.69).abs() <= 0.01);
+    assert!((coords.x4326 - 14.8391033).abs() <= 0.000001);
+    assert!((coords.y4326 - 52.343422).abs() <= 0.000001);
+}
+
+#[test]
+fn test_parse_gml_pos_yx() {
+    let gml_pos = "505645.69 216691.39";
+    let coords = parse_gml_pos(gml_pos, CoordOrder::YX).unwrap().unwrap();
+    assert!((coords.x2180 - 216691.39).abs() <= 0.01);
+    assert!((coords.y2180 - 505645.69).abs() <= 0.01);
+    assert!((coords.x4326 - 14.8391033).abs() <= 0.000001);
+    assert!((coords.y4326 - 52.343422).abs() <= 0.000001);
+}
