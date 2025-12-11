@@ -32,7 +32,7 @@ const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazw
 const CITY_TAG: &[u8] = b"prg-ad:PRG_MiejscowoscNazwa";
 const STREET_TAG: &[u8] = b"prg-ad:PRG_UlicaNazwa";
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum KomponentType {
     Country,
     Voivodeship,
@@ -767,4 +767,35 @@ fn name_from_part1_part2_part3_part4() {
     let expected_name = "Test Test2 Test3 Test4".to_string();
     let name = construct_full_name_from_parts(name_part_1, name_part_2, name_part_3, name_part_4);
     assert_eq!(name, expected_name);
+}
+
+#[test]
+fn test_build_dictionaries() {
+    let sample_file_path = "fixtures/sample_model2012.xml";
+    let mut reader = Reader::from_file(sample_file_path).unwrap();
+    reader.config_mut().expand_empty_elements = true;
+    let dict = build_dictionaries(reader);
+    let country = &dict["http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366263"];
+    assert_eq!(country.typ, KomponentType::Country);
+    assert_eq!(country.name, "POLSKA");
+    let voivodeship = &dict["http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366267"];
+    assert_eq!(voivodeship.typ, KomponentType::Voivodeship);
+    assert_eq!(voivodeship.name, "lubuskie");
+    assert_eq!(voivodeship.teryt_id, Some("08".to_string()));
+    let county = &dict["http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_366439"];
+    assert_eq!(county.typ, KomponentType::County);
+    assert_eq!(county.name, "powiat nowosolski");
+    assert_eq!(county.teryt_id, Some("0804".to_string()));
+    let municipality = &dict["http://geoportal.gov.pl/PZGIK/dane/PL.PZGIK.200_370095"];
+    assert_eq!(municipality.typ, KomponentType::Municipality);
+    assert_eq!(municipality.name, "Kolsko");
+    assert_eq!(municipality.teryt_id, Some("0804032".to_string()));
+    let city = &dict["http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA_0910140"];
+    assert_eq!(city.typ, KomponentType::City);
+    assert_eq!(city.name, "Konotop");
+    assert_eq!(city.teryt_id, Some("0910140".to_string()));
+    let street = &dict["http://geoportal.gov.pl/PZGIK/dane/PL.ZIPIN.4404.EMUiA_95d1f98c-7a1e-4726-a17d-a3c7bdaec79e"];
+    assert_eq!(street.typ, KomponentType::Street);
+    assert_eq!(street.name, "Podgórna");
+    assert_eq!(street.teryt_id, Some("16742".to_string()));
 }
