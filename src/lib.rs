@@ -166,17 +166,12 @@ pub fn get_address_parser_2021_uncompressed(
     arrow_schema: Arc<Schema>,
     geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
-    let teryt_file = std::fs::File::open(teryt_file_path).with_context(|| {
-        format!(
-            "could not open file `{}`",
-            &teryt_file_path.to_string_lossy()
-        )
-    })?;
-    let teryt_reader = BufReader::new(teryt_file);
-    let teryt_mapping = get_terc_mapping(teryt_reader)?;
+    let teryt_mapping = get_terc_mapping(teryt_file_path)?;
+
     let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
+
     reader = get_xml_reader_from_uncompressed_file(file_path)?;
     Ok(AddressParser2021::new(
         reader,
@@ -200,14 +195,7 @@ pub fn get_address_parser_2021_zip<'a>(
     arrow_schema: Arc<Schema>,
     geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
-    let teryt_file = std::fs::File::open(teryt_file_path).with_context(|| {
-        format!(
-            "could not open file `{}`",
-            &teryt_file_path.to_string_lossy()
-        )
-    })?;
-    let teryt_reader = BufReader::new(teryt_file);
-    let teryt_mapping = get_terc_mapping(teryt_reader)?;
+    let teryt_mapping = get_terc_mapping(teryt_file_path)?;
 
     let zip_file = archive
         .by_index(zip_file_index)
@@ -215,7 +203,6 @@ pub fn get_address_parser_2021_zip<'a>(
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
     reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
-
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
 

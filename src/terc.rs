@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::BufReader, path::PathBuf};
 
 use anyhow::Context;
 use quick_xml::de::Deserializer;
 use serde::Deserialize;
+use zip::ZipArchive;
 
 #[derive(Deserialize)]
 struct Teryt {
@@ -48,12 +49,59 @@ pub struct Terc {
     pub municipality_name: String,
 }
 
-pub fn get_terc_mapping(
-    reader: std::io::BufReader<std::fs::File>,
-) -> anyhow::Result<HashMap<String, Terc>> {
-    let mut deserializer = Deserializer::from_reader(reader);
-    let teryt = Teryt::deserialize(&mut deserializer)
-        .with_context(|| "Could not deserialize teryt dictionary from XML file.")?;
+pub fn get_terc_mapping(file_path: &PathBuf) -> anyhow::Result<HashMap<String, Terc>> {
+    let teryt_file = std::fs::File::open(&file_path)
+        .with_context(|| format!("could not open file `{}`", &file_path.to_string_lossy()))?;
+    let teryt = match file_path
+        .extension()
+        .expect("Could not read file extension from teryt file.")
+        .to_string_lossy()
+        .to_lowercase()
+        .as_str()
+    {
+        "xml" => {
+            let reader = BufReader::new(teryt_file);
+            let mut deserializer = Deserializer::from_reader(reader);
+            Teryt::deserialize(&mut deserializer)
+        }
+        "zip" => {
+            let mut archive = ZipArchive::new(teryt_file).with_context(|| {
+                format!("Failed to decompress ZIP file: `{}`.", &file_path.display())
+            })?;
+            let mut idx_to_read: isize = -1;
+            for idx in 0..archive.len() {
+                let entry = archive
+                    .by_index(idx)
+                    .with_context(|| "Could not access file inside ZIP archive")?;
+                let name = entry
+                    .enclosed_name()
+                    .with_context(|| "Could not read file name inside ZIP archive.")?;
+                // for now we'll determine if the file inside zip should be processed based on extension
+                let file_extension = &name
+                    .extension()
+                    .expect("Could not read file extension.")
+                    .to_string_lossy()
+                    .to_lowercase();
+                if file_extension == "xml" {
+                    idx_to_read = idx as isize;
+                }
+            }
+            if idx_to_read == -1 {
+                anyhow::bail!("Did not find XML file in ZIP archive with TERYT data.")
+            }
+            let f = archive
+                .by_index(idx_to_read as usize)
+                .with_context(|| "Could not access file inside ZIP archive")?;
+            let reader = BufReader::new(f);
+            let mut deserializer = Deserializer::from_reader(reader);
+            Teryt::deserialize(&mut deserializer)
+        }
+        _ => {
+            anyhow::bail!("")
+        }
+    }
+    .with_context(|| "Could not deserialize teryt dictionary from XML file.")?;
+
     let mut woj = HashMap::new();
     let mut pow = HashMap::new();
     let mut mapping = HashMap::new();
@@ -93,12 +141,21 @@ pub fn get_terc_mapping(
 }
 
 #[test]
-fn test_get_terc_mapping() {
-    let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.xml";
-    let teryt_file =
-        std::fs::File::open(teryt_file_path).expect("Could not open file with TERYT data.");
-    let teryt_reader = std::io::BufReader::new(teryt_file);
-    let teryt_mapping = crate::terc::get_terc_mapping(teryt_reader).unwrap();
+fn get_terc_mapping_xml() {
+    let teryt_file_path = PathBuf::from("fixtures/TERC_Urzedowy_2025-11-18.xml");
+    let teryt_mapping = crate::terc::get_terc_mapping(&teryt_file_path).unwrap();
+    let k0201011 = &teryt_mapping["0201011"];
+    assert_eq!(k0201011.municipality_name, "Bolesławiec");
+    assert_eq!(k0201011.county_teryt_id, "0201");
+    assert_eq!(k0201011.county_name, "bolesławiecki");
+    assert_eq!(k0201011.voivodeship_teryt_id, "02");
+    assert_eq!(k0201011.voivodeship_name, "dolnośląskie");
+}
+
+#[test]
+fn get_terc_mapping_zip() {
+    let teryt_file_path = PathBuf::from("fixtures/TERC_Urzedowy_2025-11-18.zip");
+    let teryt_mapping = crate::terc::get_terc_mapping(&teryt_file_path).unwrap();
     let k0201011 = &teryt_mapping["0201011"];
     assert_eq!(k0201011.municipality_name, "Bolesławiec");
     assert_eq!(k0201011.county_teryt_id, "0201");

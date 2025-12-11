@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.2] - 2025-12-11
+
+### Added
+
+- `--teryt-path` now accepts both unpacked xml file or zip
+
 ## [v0.6.1] - 2025-12-11
 
 ### Fixed
