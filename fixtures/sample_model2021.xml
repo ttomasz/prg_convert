@@ -100,6 +100,28 @@
 		</prgad:AD_PunktAdresowy>
 	</gml:featureMember>
 	<gml:featureMember>
+		<!-- added artificially since this record was somehow missing in the original file -->
+		<prgad:AD_UlicaPlac
+			gml:id="PL.ZIPIN.4877.EMUiA_75927449-9324-4148-b330-01b079a77c61_2025-11-06T15_01_29_02_00">
+			<prgad:idIIP>
+				<prgad:AD_IdentyfikatorIIP>
+					<prgad:lokalnyId>...</prgad:lokalnyId>
+					<prgad:przestrzenNazw>...</prgad:przestrzenNazw>
+					<prgad:wersjaId>2017-04-13T15:30:04+02:00</prgad:wersjaId>
+				</prgad:AD_IdentyfikatorIIP>
+			</prgad:idIIP>
+			<prgad:poczatekWersjiObiektu>2017-04-13T15:30:04</prgad:poczatekWersjiObiektu>
+			<prgad:geometria></prgad:geometria>
+			<prgad:nazwaPelna>Inwalidów Wojennych</prgad:nazwaPelna>
+			<prgad:rodzaj>1</prgad:rodzaj>
+			<prgad:TERYTNazwa1>Inwalidów Wojennych</prgad:TERYTNazwa1>
+			<prgad:identyfikatorULIC>06921</prgad:identyfikatorULIC>
+			<prgad:miejsce xlink:href="#PL.ZIPIN.4877.EMUiA_0935682_2025-11-06T15_01_26_02_00" />
+			<prgad:adres2
+				xlink:href="#PL.ZIPIN.4877.EMUiA_55fecd0f-80b5-11eb-a401-e771c31c74f2_2025-11-06T15_02_48_02_00" />
+		</prgad:AD_UlicaPlac>
+	</gml:featureMember>
+	<gml:featureMember>
 		<prgad:AD_UlicaPlac
 			gml:id="PL.ZIPIN.3122.EMUiA_24ee6a48-8011-42d4-af8e-b048691e2c8c_2017-04-13T15_30_04_02_00">
 			<prgad:idIIP>
