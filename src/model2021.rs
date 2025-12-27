@@ -489,7 +489,12 @@ impl<R: BufRead> AddressParser2021<R> {
                             let id = &get_attribute(e, b"xlink:href")[1..];
                             let city = self.mappings.city.get(id);
                             match city {
-                                None => {}
+                                None => {
+                                    println!(
+                                        "Warning: Could not find information about city with id: {} in GML.",
+                                        &id
+                                    );
+                                }
                                 Some(c) => {
                                     self.city.append_value(&c.name);
                                     self.municipality_teryt_id
@@ -527,7 +532,12 @@ impl<R: BufRead> AddressParser2021<R> {
                             let id = &get_attribute(e, b"xlink:href")[1..];
                             let street = self.mappings.street.get(id);
                             match street {
-                                None => {}
+                                None => {
+                                    println!(
+                                        "Warning: Could not find information about street with id: {} in GML.",
+                                        &id
+                                    );
+                                }
                                 Some(s) => {
                                     self.street.append_value(&s.name);
                                     option_append_value_or_null(
