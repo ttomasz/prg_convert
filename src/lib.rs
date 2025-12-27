@@ -232,6 +232,247 @@ mod tests {
     use arrow::compute::concat_batches;
 
     #[test]
+    fn test_address_parser_2012_zip_csv() {
+        let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
+        let f = std::fs::File::open(&sample_file_path)
+            .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
+        let mut archive = ZipArchive::new(f)
+            .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
+        let parser = get_address_parser_2012_zip(
+            &mut archive,
+            &1,
+            &OutputFormat::CSV,
+            0,
+            &CRS::Epsg4326,
+            crate::common::SCHEMA_CSV.clone(),
+            &PointType::new(
+                geoarrow::datatypes::Dimension::XY,
+                Arc::new(geoarrow::datatypes::Metadata::new(
+                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
+                    None,
+                )),
+            ),
+        );
+        let batches: Vec<arrow::array::RecordBatch> = parser
+            .expect("Something wrong while creating parser object.")
+            .into_iter()
+            .collect();
+        let arrow_batch = concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches)
+            .expect("Error in concatenating batches");
+        assert_eq!(arrow_batch.num_rows(), 2);
+        assert_eq!(arrow_batch.num_columns(), 24);
+        let expected_przestrzen_nazw = &StringArray::from(vec!["PL.PZGIK.200", "PL.PZGIK.200"]);
+        let przestrzen_nazw: &StringArray = &arrow_batch
+            .column_by_name("przestrzen_nazw")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&przestrzen_nazw, &expected_przestrzen_nazw);
+        let expected_lokalny_id = &StringArray::from(vec![
+            "fd9c9319-0a6a-44b4-972a-1e6c4ec0d4ca",
+            "5baa8bef-75ef-4241-a2fe-9d4137845693",
+        ]);
+        let lokalny_id: &StringArray = &arrow_batch
+            .column_by_name("lokalny_id")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&lokalny_id, &expected_lokalny_id);
+        //
+        let expected_wersja_id =
+            &TimestampMillisecondArray::from(vec![1662740296000, 1492765775000])
+                .with_timezone(Arc::from("UTC"));
+        let wersja_id: &TimestampMillisecondArray = &arrow_batch
+            .column_by_name("wersja_id")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&wersja_id, &expected_wersja_id);
+        let expected_poczatek_wersji_obiektu =
+            &TimestampMillisecondArray::from(vec![1662747496000, 1492772975000])
+                .with_timezone(Arc::from("UTC"));
+        let poczatek_wersji_obiektu: &TimestampMillisecondArray = &arrow_batch
+            .column_by_name("poczatek_wersji_obiektu")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&poczatek_wersji_obiektu, &expected_poczatek_wersji_obiektu);
+        //
+        let expected_wazny_od_lub_data_nadania = &Date32Array::from(vec![19244, 16134]);
+        let wazny_od_lub_data_nadania: &Date32Array = &arrow_batch
+            .column_by_name("wazny_od_lub_data_nadania")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(
+            &wazny_od_lub_data_nadania,
+            &expected_wazny_od_lub_data_nadania
+        );
+        let expected_wazny_do = &Date32Array::from(vec![None, None]);
+        let wazny_do: &Date32Array = &arrow_batch
+            .column_by_name("wazny_do")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&wazny_do, &expected_wazny_do);
+        //
+        let expected_teryt_wojewodztwo = &StringArray::from(vec!["08", "08"]);
+        let teryt_wojewodztwo: &StringArray = &arrow_batch
+            .column_by_name("teryt_wojewodztwo")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_wojewodztwo, &expected_teryt_wojewodztwo);
+        let expected_wojewodztwo = &StringArray::from(vec!["lubuskie", "lubuskie"]);
+        let wojewodztwo: &StringArray = &arrow_batch
+            .column_by_name("wojewodztwo")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&wojewodztwo, &expected_wojewodztwo);
+        let expected_teryt_powiat = &StringArray::from(vec!["0804", "0804"]);
+        let teryt_powiat: &StringArray = &arrow_batch
+            .column_by_name("teryt_powiat")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_powiat, &expected_teryt_powiat);
+        let expected_powiat = &StringArray::from(vec!["nowosolski", "nowosolski"]);
+        let powiat: &StringArray = &arrow_batch
+            .column_by_name("powiat")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&powiat, &expected_powiat);
+        let expected_teryt_gmina = &StringArray::from(vec!["0804032", "0804032"]);
+        let teryt_gmina: &StringArray = &arrow_batch
+            .column_by_name("teryt_gmina")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_gmina, &expected_teryt_gmina);
+        let expected_gmina = &StringArray::from(vec!["Kolsko", "Kolsko"]);
+        let gmina: &StringArray = &arrow_batch
+            .column_by_name("gmina")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&gmina, &expected_gmina);
+        let expected_teryt_miejscowosc = &StringArray::from(vec!["0910140", "0910140"]);
+        let teryt_miejscowosc: &StringArray = &arrow_batch
+            .column_by_name("teryt_miejscowosc")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_miejscowosc, &expected_teryt_miejscowosc);
+        let expected_miejscowosc = &StringArray::from(vec!["Konotop", "Konotop"]);
+        let miejscowosc: &StringArray = &arrow_batch
+            .column_by_name("miejscowosc")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&miejscowosc, &expected_miejscowosc);
+        let expected_czesc_miejscowosci =
+            &StringArray::from(vec![None, None] as Vec<Option<String>>);
+        let czesc_miejscowosci: &StringArray = &arrow_batch
+            .column_by_name("czesc_miejscowosci")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&czesc_miejscowosci, &expected_czesc_miejscowosci);
+        let expected_teryt_ulica = &StringArray::from(vec!["16742", "16742"]);
+        let teryt_ulica: &StringArray = &arrow_batch
+            .column_by_name("teryt_ulica")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_ulica, &expected_teryt_ulica);
+        let expected_ulica = &StringArray::from(vec!["Podgórna", "Podgórna"]);
+        let ulica: &StringArray = &arrow_batch
+            .column_by_name("ulica")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&ulica, &expected_ulica);
+        let expected_numer_porzadkowy = &StringArray::from(vec!["2", "1"]);
+        let numer_porzadkowy: &StringArray = &arrow_batch
+            .column_by_name("numer_porzadkowy")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&numer_porzadkowy, &expected_numer_porzadkowy);
+        let expected_kod_pocztowy = &StringArray::from(vec!["67-416", "67-416"]);
+        let kod_pocztowy: &StringArray = &arrow_batch
+            .column_by_name("kod_pocztowy")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&kod_pocztowy, &expected_kod_pocztowy);
+        let expected_status = &StringArray::from(vec!["istniejacy", "istniejacy"]);
+        let status: &StringArray = &arrow_batch
+            .column_by_name("status")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&status, &expected_status);
+        //
+        let expected_x_epsg_2180 = &Float64Array::from(vec![287772.37, 287751.0102]);
+        let x_epsg_2180: &Float64Array = &arrow_batch
+            .column_by_name("x_epsg_2180")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&x_epsg_2180, &expected_x_epsg_2180);
+        let expected_y_epsg_2180 = &Float64Array::from(vec![456005.140000001, 456027.7794]);
+        let y_epsg_2180: &Float64Array = &arrow_batch
+            .column_by_name("y_epsg_2180")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&y_epsg_2180, &expected_y_epsg_2180);
+        let expected_dlugosc_geograficzna =
+            &Float64Array::from(vec![15.9121240698886, 15.911799807186908]);
+        let dlugosc_geograficzna: &Float64Array = &arrow_batch
+            .column_by_name("dlugosc_geograficzna")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&dlugosc_geograficzna, &expected_dlugosc_geograficzna);
+        let expected_szerokosc_geograficzna =
+            &Float64Array::from(vec![51.92977532639213, 51.92997049675426]);
+        let szerokosc_geograficzna: &Float64Array = &arrow_batch
+            .column_by_name("szerokosc_geograficzna")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&szerokosc_geograficzna, &expected_szerokosc_geograficzna);
+    }
+
+    #[test]
     fn test_address_parser_2021_zip_csv() {
         let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
