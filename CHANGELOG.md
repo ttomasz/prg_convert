@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.3] - 
+
+### Added
+
+- print warnings in case mappings in 2021 schema are incomplete in source files
+
 ## [v0.6.2] - 2025-12-11
 
 ### Added
