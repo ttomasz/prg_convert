@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use arrow::{array::RecordBatch, csv::writer::WriterBuilder};
 use clap::Parser;
+use geoarrow_flatgeobuf::writer::{FlatGeobufWriter, FlatGeobufWriterOptions};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperties};
 
@@ -41,6 +42,14 @@ fn write_batch(
                 .as_mut()
                 .unwrap()
                 .write(&encoded_batch)
+                .expect("Failed to write batch.");
+        }
+        OutputFormat::FlatGeoBuf => {
+            writer
+                .flatgeobuf
+                .as_mut()
+                .unwrap()
+                .write(&batch)
                 .expect("Failed to write batch.");
         }
     }
@@ -176,9 +185,32 @@ fn main() -> Result<()> {
             Writer {
                 csv: Some(WriterBuilder::new().with_header(true).build(output_file)),
                 geoparquet: None,
+                flatgeobuf: None,
             },
             None,
         ),
+        OutputFormat::FlatGeoBuf => {
+            let options = FlatGeobufWriterOptions::new("addresses".to_string())
+                .with_write_index(true)
+                .with_detect_type(true)
+                // .with_crs_transform(crs_transform)
+                ;
+            (
+                Writer {
+                    csv: None,
+                    geoparquet: None,
+                    flatgeobuf: Some(
+                        FlatGeobufWriter::try_new(
+                            output_file,
+                            parsed_args.arrow_schema.clone(),
+                            options,
+                        )
+                        .expect("Could not create FlatGeoBuf writer."),
+                    ),
+                },
+                None,
+            )
+        }
         OutputFormat::GeoParquet => {
             let props = WriterProperties::builder()
                 .set_max_row_group_size(parsed_args.parquet_row_group_size)
@@ -197,6 +229,7 @@ fn main() -> Result<()> {
                         ArrowWriter::try_new(output_file, gpq_encoder.target_schema(), Some(props))
                             .expect("Could not create GeoParquet writer."),
                     ),
+                    flatgeobuf: None,
                 },
                 Some(gpq_encoder),
             )
@@ -253,16 +286,25 @@ fn main() -> Result<()> {
 
         file_counter += 1;
     }
-    if matches!(parsed_args.output_format, OutputFormat::GeoParquet) {
-        let kv_metadata = geoparquet_encoder
-            .unwrap()
-            .into_keyvalue()
-            .expect("Could not create GeoParquet K/V metadata.");
-        let parquet_writer = writer.geoparquet.as_mut().unwrap();
-        parquet_writer.append_key_value_metadata(kv_metadata);
-        parquet_writer
-            .finish()
-            .expect("Failed to write geoparquet metadata.");
+    match &parsed_args.output_format {
+        OutputFormat::CSV => {}
+        OutputFormat::GeoParquet => {
+            let kv_metadata = geoparquet_encoder
+                .unwrap()
+                .into_keyvalue()
+                .expect("Could not create GeoParquet K/V metadata.");
+            let parquet_writer = writer.geoparquet.as_mut().unwrap();
+            parquet_writer.append_key_value_metadata(kv_metadata);
+            parquet_writer
+                .finish()
+                .expect("Failed to write geoparquet metadata.");
+        }
+        OutputFormat::FlatGeoBuf => {
+            let fgb_writer = writer.flatgeobuf.unwrap();
+            fgb_writer
+                .finish()
+                .expect("Failed to finish writing FlatGeoBuf file.");
+        }
     }
     let duration = start_time.elapsed();
     println!("----------------------------------------");

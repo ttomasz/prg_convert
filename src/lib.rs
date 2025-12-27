@@ -28,6 +28,7 @@ pub enum CoordOrder {
 pub enum OutputFormat {
     CSV,
     GeoParquet,
+    FlatGeoBuf,
 }
 
 impl std::fmt::Display for OutputFormat {
@@ -35,6 +36,7 @@ impl std::fmt::Display for OutputFormat {
         match self {
             OutputFormat::CSV => write!(f, "csv"),
             OutputFormat::GeoParquet => write!(f, "geoparquet"),
+            OutputFormat::FlatGeoBuf => write!(f, "flatgeobuf"),
         }
     }
 }
@@ -86,6 +88,7 @@ impl std::fmt::Display for CRS {
 pub struct Writer {
     pub csv: Option<arrow::csv::writer::Writer<std::fs::File>>,
     pub geoparquet: Option<parquet::arrow::arrow_writer::ArrowWriter<std::fs::File>>,
+    pub flatgeobuf: Option<geoarrow_flatgeobuf::writer::FlatGeobufWriter<'static, std::fs::File>>,
 }
 
 fn get_xml_reader_from_uncompressed_file(

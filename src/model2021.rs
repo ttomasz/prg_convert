@@ -426,7 +426,7 @@ impl<R: BufRead> AddressParser2021<R> {
                 ],
             )
             .expect("Failed to create RecordBatch"),
-            OutputFormat::GeoParquet => {
+            OutputFormat::GeoParquet | OutputFormat::FlatGeoBuf => {
                 let iter = self.geometry.iter().map(Option::as_ref);
                 let geometry_array =
                     PointBuilder::from_nullable_points(iter, self.geoarrow_geom_type.clone())
@@ -623,7 +623,7 @@ impl<R: BufRead> AddressParser2021<R> {
                                             self.x_epsg_2180.append_null();
                                             self.y_epsg_2180.append_null();
                                         }
-                                        OutputFormat::GeoParquet => {
+                                        OutputFormat::GeoParquet | OutputFormat::FlatGeoBuf => {
                                             self.geometry.push(None);
                                         }
                                     }
@@ -636,14 +636,16 @@ impl<R: BufRead> AddressParser2021<R> {
                                             self.x_epsg_2180.append_value(coords.x2180);
                                             self.y_epsg_2180.append_value(coords.y2180);
                                         }
-                                        OutputFormat::GeoParquet => match self.crs {
-                                            CRS::Epsg2180 => {
-                                                self.geometry.push(Some(geo_types::point!(x: coords.x2180, y: coords.y2180)));
+                                        OutputFormat::GeoParquet | OutputFormat::FlatGeoBuf => {
+                                            match self.crs {
+                                                CRS::Epsg2180 => {
+                                                    self.geometry.push(Some(geo_types::point!(x: coords.x2180, y: coords.y2180)));
+                                                }
+                                                CRS::Epsg4326 => {
+                                                    self.geometry.push(Some(geo_types::point!(x: coords.x4326, y: coords.y4326)));
+                                                }
                                             }
-                                            CRS::Epsg4326 => {
-                                                self.geometry.push(Some(geo_types::point!(x: coords.x4326, y: coords.y4326)));
-                                            }
-                                        },
+                                        }
                                     }
                                 }
                             }
@@ -732,7 +734,7 @@ impl<R: BufRead> AddressParser2021<R> {
                                 self.y_epsg_2180.append_null();
                             }
                         }
-                        OutputFormat::GeoParquet => {
+                        OutputFormat::GeoParquet | OutputFormat::FlatGeoBuf => {
                             if self.geometry.len() < buffer_length {
                                 self.geometry.push(None);
                             }
