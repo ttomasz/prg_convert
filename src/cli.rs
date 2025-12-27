@@ -44,7 +44,7 @@ pub struct RawArgs {
     output_path: std::path::PathBuf,
     #[arg(
         long = "output-format",
-        help = "Output file format (one of: csv, geoparquet)."
+        help = "Output file format (one of: csv, geoparquet, flatgeobuf)."
     )]
     output_format: String,
     #[arg(long = "schema-version", help = "Schema version (one of: 2012, 2021).")]
@@ -424,6 +424,7 @@ impl TryInto<ParsedArgs> for RawArgs {
         let output_format = match self.output_format.to_lowercase().as_str() {
             "csv" => OutputFormat::CSV,
             "geoparquet" => OutputFormat::GeoParquet,
+            "flatgeobuf" => OutputFormat::FlatGeoBuf,
             _ => {
                 anyhow::bail!(
                     "unsupported format `{}`, expected one of: csv, geoparquet",
@@ -481,7 +482,9 @@ impl TryInto<ParsedArgs> for RawArgs {
             PointType::new(Dimension::XY, geoarrow_metadata).with_coord_type(CoordType::Separated);
         let arrow_schema = match output_format {
             OutputFormat::CSV => SCHEMA_CSV.clone(),
-            OutputFormat::GeoParquet => get_geoparquet_schema(geom_type.clone()),
+            OutputFormat::GeoParquet | OutputFormat::FlatGeoBuf => {
+                get_geoparquet_schema(geom_type.clone())
+            }
         };
         let parsed_paths = if download_data {
             vec![]
