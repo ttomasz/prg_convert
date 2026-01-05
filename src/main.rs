@@ -9,8 +9,9 @@ use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperti
 
 mod cli;
 use prg_convert::{
-    FileType, OutputFormat, SchemaVersion, Writer, get_address_parser_2012_uncompressed,
-    get_address_parser_2012_zip, get_address_parser_2021_uncompressed, get_address_parser_2021_zip,
+    FileType, OutputFormat, SchemaVersion, Writer, common::FgbCrsTransform,
+    get_address_parser_2012_uncompressed, get_address_parser_2012_zip,
+    get_address_parser_2021_uncompressed, get_address_parser_2021_zip,
 };
 use zip::ZipArchive;
 
@@ -193,8 +194,7 @@ fn main() -> Result<()> {
             let options = FlatGeobufWriterOptions::new("addresses".to_string())
                 .with_write_index(true)
                 .with_detect_type(true)
-                // .with_crs_transform(crs_transform)
-                ;
+                .with_crs_transform(Box::new(FgbCrsTransform));
             (
                 Writer {
                     csv: None,

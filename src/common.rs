@@ -10,6 +10,8 @@ use arrow::datatypes::TimeUnit;
 use chrono::NaiveDate;
 use geoarrow::datatypes::Crs;
 use geoarrow::datatypes::PointType;
+use geoarrow::error::GeoArrowResult;
+use geoarrow_schema::crs::CrsTransform;
 use once_cell::sync::Lazy;
 use proj4rs::Proj;
 
@@ -289,6 +291,44 @@ const PROJJSON_EPSG_4326: Lazy<serde_json::Value> = Lazy::new(|| {
     )
     .unwrap()
 });
+const WKT_EPSG_2180: Lazy<&str> = Lazy::new(|| {
+    r#"
+PROJCS["ETRF2000-PL / CS92",
+    GEOGCS["ETRF2000-PL",
+        DATUM["ETRF2000_Poland",
+            SPHEROID["GRS 1980",6378137,298.257222101,
+                AUTHORITY["EPSG","7019"]],
+            AUTHORITY["EPSG","1305"]],
+        PRIMEM["Greenwich",0,
+            AUTHORITY["EPSG","8901"]],
+        UNIT["degree",0.0174532925199433,
+            AUTHORITY["EPSG","9122"]],
+        AUTHORITY["EPSG","9702"]],
+    PROJECTION["Transverse_Mercator"],
+    PARAMETER["latitude_of_origin",0],
+    PARAMETER["central_meridian",19],
+    PARAMETER["scale_factor",0.9993],
+    PARAMETER["false_easting",500000],
+    PARAMETER["false_northing",-5300000],
+    UNIT["metre",1,
+        AUTHORITY["EPSG","9001"]],
+    AUTHORITY["EPSG","2180"]]
+"#
+});
+const WKT_EPSG_4326: Lazy<&str> = Lazy::new(|| {
+    r#"
+GEOGCS["WGS 84",
+    DATUM["WGS_1984",
+        SPHEROID["WGS 84",6378137,298.257223563,
+            AUTHORITY["EPSG","7030"]],
+        AUTHORITY["EPSG","6326"]],
+    PRIMEM["Greenwich",0,
+        AUTHORITY["EPSG","8901"]],
+    UNIT["degree",0.0174532925199433,
+        AUTHORITY["EPSG","9122"]],
+    AUTHORITY["EPSG","4326"]]
+"#
+});
 pub const CRS_4326: Lazy<Crs> = Lazy::new(|| Crs::from_projjson(PROJJSON_EPSG_4326.clone()));
 pub const CRS_2180: Lazy<Crs> = Lazy::new(|| Crs::from_projjson(PROJJSON_EPSG_2180.clone()));
 pub const EPSG_2180: Lazy<Proj> = Lazy::new(|| Proj::from_epsg_code(2180).unwrap());
@@ -409,6 +449,30 @@ pub fn parse_gml_pos(
             "Warning: could not parse coordinates in gml:pos: `{}`.",
             text_trimmed
         );
+    }
+}
+
+// Custom transformer to map CRS objects (which in our case were created from PROJJSON) to WKT
+#[derive(Debug)]
+pub struct FgbCrsTransform;
+
+impl CrsTransform for FgbCrsTransform {
+    fn _convert_to_wkt(&self, crs: &Crs) -> GeoArrowResult<Option<String>> {
+        if crs == &*CRS_4326 {
+            return Ok(Some(WKT_EPSG_4326.clone().to_owned()));
+        } else if crs == &*CRS_2180 {
+            return Ok(Some(WKT_EPSG_2180.clone().to_owned()));
+        } else {
+            return Err(geoarrow::error::GeoArrowError::Crs(format!(
+                "Could not find appropriate Crs Transform for {:?}",
+                &crs
+            )));
+        }
+    }
+
+    fn _convert_to_projjson(&self, _crs_list: &Crs) -> GeoArrowResult<Option<serde_json::Value>> {
+        // Not needed for FlatGeoBuf (which uses WKT), so return None
+        Ok(None)
     }
 }
 
