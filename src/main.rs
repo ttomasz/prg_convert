@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{os::unix::fs::MetadataExt, path::PathBuf};
 
 use anyhow::{Context, Result};
 use arrow::{array::RecordBatch, csv::writer::WriterBuilder};
@@ -309,11 +309,20 @@ fn main() -> Result<()> {
     let duration = start_time.elapsed();
     println!("----------------------------------------");
     println!(
-        "📊 Total addresses read {}. Duration: {:#?}. Data size: {:.2}MB.",
+        "📊 Total addresses read {}. Duration: {:.1}s. Input data size: {:.2}MB.",
         total_row_count,
-        duration,
+        duration.as_secs_f64(),
         (total_file_size as f64 / 1024.0 / 1024.0)
     );
+
+    let _ = &parsed_args.output_path.metadata().inspect(|f| {
+        let output_file_size_mb = f.size() as f64 / 1024.0 / 1024.0;
+        println!(
+            "💾 Output file: {} size: {:.2}MB",
+            &parsed_args.output_path.to_string_lossy(),
+            output_file_size_mb
+        );
+    });
 
     Ok(())
 }
