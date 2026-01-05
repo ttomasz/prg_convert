@@ -17,6 +17,7 @@
 
 ### Added
 
+- added FlatGeoBuf as output format
 - print warnings in case mappings in 2021 schema are incomplete in source files
 - added info about output file path and size to log
 - added option to download teryt dictionary from api on runtime
