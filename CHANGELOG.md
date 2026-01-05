@@ -4,7 +4,9 @@
 
 ### Added
 
+- added FlatGeoBuf as output format
 - print warnings in case mappings in 2021 schema are incomplete in source files
+- added info about output file path and size to log
 
 ## [v0.6.2] - 2025-12-11
 
