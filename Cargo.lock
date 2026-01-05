@@ -1338,6 +1338,7 @@ dependencies = [
  "geo-types",
  "geoarrow",
  "geoarrow-flatgeobuf",
+ "geoarrow-schema",
  "geoparquet",
  "glob",
  "once_cell",
