@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
+use clap::ArgAction;
 use geoarrow::datatypes::CoordType;
 use geoarrow::datatypes::Dimension;
 use geoarrow::datatypes::Metadata;
@@ -46,9 +47,21 @@ pub struct RawArgs {
     schema_version: String,
     #[arg(
         long = "teryt-path",
-        help = "Path of XML file with teryt dictionary unpacked from archive downloaded from: https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default (TERC, podstawowa). Required for --schema-version 2021."
+        help = "Path of XML file with TERYT dictionary unpacked from archive downloaded from: https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default (TERC, podstawowa). Required for --schema-version 2021."
     )]
     teryt_path: Option<std::path::PathBuf>,
+    #[arg(long = "download-teryt", action = ArgAction::SetTrue, help = "Download TERYT dictionary file from official API. (Requires authentication info, see: https://api.stat.gov.pl/Home/TerytApi , relevant flags: teryt-api-username, teryt-api-password)")]
+    teryt_download: Option<bool>,
+    #[arg(
+        long = "teryt-api-username",
+        help = "(Optional) Username to use when authenticating to TERYT API if it's used (`download-teryt` flag is used). If not provided env variable: TERYT_API_USERNAME will be used."
+    )]
+    teryt_api_username: Option<String>,
+    #[arg(
+        long = "teryt-api-password",
+        help = "(Optional) Password to use when authenticating to TERYT API if it's used (`download-teryt` flag is used). If not provided env variable: TERYT_API_PASSWORD will be used."
+    )]
+    teryt_api_password: Option<String>,
     #[arg(
         long = "batch-size",
         help = format!("(Optional) How many rows are kept in memory before writing to output (default: {}).", DEFAULT_BATCH_SIZE),
@@ -185,6 +198,9 @@ pub struct ParsedArgs {
     pub input_paths: Vec<String>,
     pub parsed_paths: Vec<FileRecord>,
     pub output_path: PathBuf,
+    pub download_teryt: bool,
+    pub teryt_api_username: Option<String>,
+    pub teryt_api_password: Option<String>,
     pub teryt_path: Option<std::path::PathBuf>,
     pub batch_size: usize,
     pub schema_version: SchemaVersion,
@@ -245,6 +261,23 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
     println!("  Output file: {}", parsed_args.output_path.display());
     println!("  Output file format: {}", parsed_args.output_format);
     println!("  Schema version: {}", parsed_args.schema_version);
+    match parsed_args.schema_version {
+        SchemaVersion::Model2012 => {}
+        SchemaVersion::Model2021 => {
+            println!("  Download TERYT from API: {}", parsed_args.download_teryt);
+            if parsed_args.download_teryt {
+                println!(
+                    "  TERYT API Username: {}",
+                    parsed_args.teryt_api_username.as_ref().unwrap()
+                );
+            } else {
+                println!(
+                    "  TERYT file: {}",
+                    &parsed_args.teryt_path.as_ref().unwrap().display()
+                );
+            }
+        }
+    }
     println!("  Batch size: {}", parsed_args.batch_size);
     if let OutputFormat::GeoParquet = parsed_args.output_format {
         println!("  Parquet compression: {}", parsed_args.parquet_compression);
@@ -276,9 +309,33 @@ impl TryInto<ParsedArgs> for RawArgs {
 
     fn try_into(self) -> anyhow::Result<ParsedArgs> {
         let batch_size = self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
-        if self.schema_version.to_lowercase() == "2021" && self.teryt_path.is_none() {
+        let download_teryt_flag = {
+            let mut flag = self.teryt_download.unwrap_or(false);
+            if self.schema_version.to_lowercase() == "2012" && flag {
+                println!(
+                    "Warning: teryt-download was set to true but schema was set to 2012 which is not compatible. teryt-download will be treated as false."
+                );
+                flag = false;
+            }
+            flag
+        };
+        if self.schema_version.to_lowercase() == "2021"
+            && self.teryt_path.is_none()
+            && !download_teryt_flag
+        {
             anyhow::bail!(
-                "Chosen schema 2021 but did not provide teryt file path. PRG schema 2021 does not contain names of administrative units so they need to be read from external source."
+                "Chosen schema 2021 but provided neither teryt file path nor teryt-download flag. PRG schema 2021 does not contain names of administrative units so they need to be read from external source."
+            )
+        }
+        let teryt_api_username = self
+            .teryt_api_username
+            .unwrap_or(std::env::var("TERYT_API_USERNAME").unwrap_or_default());
+        let teryt_api_password = self
+            .teryt_api_password
+            .unwrap_or(std::env::var("TERYT_API_PASSWORD").unwrap_or_default());
+        if download_teryt_flag && (teryt_api_username.is_empty() || teryt_api_password.is_empty()) {
+            anyhow::bail!(
+                "When teryt-download flag is used then either the env variables need to be set or credentials needs to be provided via parameters."
             )
         }
         let schema_version = match self.schema_version.to_lowercase().as_str() {
@@ -353,11 +410,22 @@ impl TryInto<ParsedArgs> for RawArgs {
             OutputFormat::CSV => SCHEMA_CSV.clone(),
             OutputFormat::GeoParquet => get_geoparquet_schema(geom_type.clone()),
         };
-        let paths = parse_input_paths(&self.input_paths, &schema_version);
+        let parsed_paths = parse_input_paths(&self.input_paths, &schema_version)?;
         Ok(ParsedArgs {
             input_paths: self.input_paths,
-            parsed_paths: paths?,
+            parsed_paths: parsed_paths,
             output_path: self.output_path,
+            download_teryt: download_teryt_flag,
+            teryt_api_username: if teryt_api_username.is_empty() {
+                None
+            } else {
+                Some(teryt_api_username)
+            },
+            teryt_api_password: if teryt_api_password.is_empty() {
+                None
+            } else {
+                Some(teryt_api_password)
+            },
             teryt_path: self.teryt_path,
             batch_size: batch_size,
             schema_version: schema_version,

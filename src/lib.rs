@@ -12,6 +12,7 @@ use zip::read::ZipFile;
 
 mod terc;
 use terc::get_terc_mapping;
+use terc::download_terc_mapping;
 pub mod common;
 mod model2012;
 use model2012::AddressParser2012;
@@ -161,12 +162,24 @@ pub fn get_address_parser_2021_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
     output_format: &OutputFormat,
-    teryt_file_path: &PathBuf,
+    download_teryt: bool,
+    teryt_api_username: &Option<String>,
+    teryt_api_password: &Option<String>,
+    teryt_file_path: &Option<PathBuf>,
     crs: &CRS,
     arrow_schema: Arc<Schema>,
     geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
-    let teryt_mapping = get_terc_mapping(teryt_file_path)?;
+    let teryt_mapping = {
+        if download_teryt {
+            download_terc_mapping(
+                teryt_api_username.clone().unwrap().as_str(),
+                teryt_api_password.clone().unwrap().as_str(),
+            )?
+        } else {
+            get_terc_mapping(teryt_file_path.as_ref().unwrap())?
+        }
+    };
 
     let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
@@ -189,13 +202,25 @@ pub fn get_address_parser_2021_zip<'a>(
     archive: &'a mut ZipArchive<File>,
     batch_size: &usize,
     output_format: &OutputFormat,
-    teryt_file_path: &PathBuf,
+    download_teryt: bool,
+    teryt_api_username: &Option<String>,
+    teryt_api_password: &Option<String>,
+    teryt_file_path: &Option<PathBuf>,
     zip_file_index: usize,
     crs: &CRS,
     arrow_schema: Arc<Schema>,
     geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
-    let teryt_mapping = get_terc_mapping(teryt_file_path)?;
+    let teryt_mapping = {
+        if download_teryt {
+            download_terc_mapping(
+                teryt_api_username.clone().unwrap().as_str(),
+                teryt_api_password.clone().unwrap().as_str(),
+            )?
+        } else {
+            get_terc_mapping(teryt_file_path.as_ref().unwrap())?
+        }
+    };
 
     let zip_file = archive
         .by_index(zip_file_index)
@@ -484,7 +509,10 @@ mod tests {
             &mut archive,
             &1,
             &OutputFormat::CSV,
-            &PathBuf::from(teryt_file_path),
+            false,
+            &None,
+            &None,
+            &Some(PathBuf::from(teryt_file_path)),
             1,
             &CRS::Epsg4326,
             crate::common::SCHEMA_CSV.clone(),
