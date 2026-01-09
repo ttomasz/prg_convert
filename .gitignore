@@ -23,3 +23,5 @@ target
 .vscode/
 
 test_data/
+
+.env
