@@ -175,6 +175,9 @@ fn parse_input_paths(
             });
         }
     }
+    if paths.is_empty() {
+        anyhow::bail!("Could not read input files. Do the files exist? Are the paths correct?");
+    }
     Ok(paths)
 }
 
