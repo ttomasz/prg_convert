@@ -5,6 +5,8 @@
 ### Added
 
 - print warnings in case mappings in 2021 schema are incomplete in source files
+- added info about output file path and size to log
+- added option to download teryt dictionary from api on runtime
 
 ## [v0.6.2] - 2025-12-11
 
