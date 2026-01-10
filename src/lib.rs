@@ -11,8 +11,8 @@ use zip::ZipArchive;
 use zip::read::ZipFile;
 
 mod terc;
-use terc::get_terc_mapping;
 use terc::download_terc_mapping;
+use terc::get_terc_mapping;
 pub mod common;
 mod model2012;
 use model2012::AddressParser2012;
