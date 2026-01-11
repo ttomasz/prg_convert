@@ -20,7 +20,7 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 - Zapis do FlatGeoBuf
 - Zapis do GeoJSON
 - Pobieranie pliku ZIP z adresami z Geoportalu
-- Pobieranie pliku ZIP ze słownikami TERYT z API GUS
+- ✅ Pobieranie pliku ZIP ze słownikami TERYT z API GUS
 
 ## Obsługa
 Pobierz plik zip (Windows) lub tar.gz (Linuks) z zakładki [Releases](https://github.com/ttomasz/prg_convert/releases) i rozpakuj go.
