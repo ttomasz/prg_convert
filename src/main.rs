@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use arrow::{array::RecordBatch, csv::writer::WriterBuilder};
@@ -10,6 +10,7 @@ mod cli;
 use prg_convert::{
     FileType, OutputFormat, SchemaVersion, Writer, get_address_parser_2012_uncompressed,
     get_address_parser_2012_zip, get_address_parser_2021_uncompressed, get_address_parser_2021_zip,
+    get_teryt_mapping, terc::Terc,
 };
 use zip::ZipArchive;
 
@@ -53,6 +54,7 @@ fn parse_file(
     mut writer: &mut Writer,
     mut geoparquet_encoder: &mut Option<GeoParquetRecordBatchEncoder>,
     zip_file_index: &Option<usize>,
+    teryt_mapping: &Option<HashMap<String, Terc>>,
 ) -> anyhow::Result<usize> {
     let mut processed_rows = 0;
     match (&file_type, &parsed_args.schema_version) {
@@ -107,10 +109,7 @@ fn parse_file(
                 &file_path,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
-                parsed_args.download_teryt,
-                &parsed_args.teryt_api_username,
-                &parsed_args.teryt_api_password,
-                &parsed_args.teryt_path,
+                teryt_mapping.as_ref().unwrap(),
                 &parsed_args.crs,
                 parsed_args.arrow_schema.clone(),
                 &parsed_args.geoarrow_geom_type,
@@ -136,10 +135,7 @@ fn parse_file(
                 &mut archive,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
-                parsed_args.download_teryt,
-                &parsed_args.teryt_api_username,
-                &parsed_args.teryt_api_password,
-                &parsed_args.teryt_path,
+                teryt_mapping.as_ref().unwrap(),
                 zip_file_index.unwrap(),
                 &parsed_args.crs,
                 parsed_args.arrow_schema.clone(),
@@ -210,6 +206,15 @@ fn main() -> Result<()> {
     };
 
     let num_files_to_process = &parsed_args.parsed_paths.len();
+    let teryt_mapping = match &parsed_args.schema_version {
+        SchemaVersion::Model2012 => None,
+        SchemaVersion::Model2021 => Some(get_teryt_mapping(
+            parsed_args.download_teryt,
+            &parsed_args.teryt_api_username,
+            &parsed_args.teryt_api_password,
+            &parsed_args.teryt_path,
+        )?),
+    };
     for file in &parsed_args.parsed_paths {
         total_file_size += &file.size_in_bytes;
 
@@ -231,6 +236,7 @@ fn main() -> Result<()> {
                     &mut writer,
                     &mut geoparquet_encoder,
                     &None,
+                    &teryt_mapping,
                 )?;
                 total_row_count += processed_rows;
             }
@@ -251,6 +257,7 @@ fn main() -> Result<()> {
                         &mut writer,
                         &mut geoparquet_encoder,
                         &Some(compressed_file.index),
+                        &teryt_mapping,
                     )?;
                     total_row_count += processed_rows;
                 }

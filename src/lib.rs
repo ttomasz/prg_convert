@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -10,7 +11,8 @@ use quick_xml::Reader;
 use zip::ZipArchive;
 use zip::read::ZipFile;
 
-mod terc;
+pub mod terc;
+use terc::Terc;
 use terc::download_terc_mapping;
 use terc::get_terc_mapping;
 pub mod common;
@@ -158,29 +160,31 @@ pub fn get_address_parser_2012_zip<'a>(
     ))
 }
 
-pub fn get_address_parser_2021_uncompressed(
-    file_path: &PathBuf,
-    batch_size: &usize,
-    output_format: &OutputFormat,
+pub fn get_teryt_mapping(
     download_teryt: bool,
     teryt_api_username: &Option<String>,
     teryt_api_password: &Option<String>,
     teryt_file_path: &Option<PathBuf>,
+) -> anyhow::Result<HashMap<String, Terc>> {
+    if download_teryt {
+        download_terc_mapping(
+            teryt_api_username.clone().unwrap().as_str(),
+            teryt_api_password.clone().unwrap().as_str(),
+        )
+    } else {
+        get_terc_mapping(teryt_file_path.as_ref().unwrap())
+    }
+}
+
+pub fn get_address_parser_2021_uncompressed(
+    file_path: &PathBuf,
+    batch_size: &usize,
+    output_format: &OutputFormat,
+    teryt_mapping: &HashMap<String, Terc>,
     crs: &CRS,
     arrow_schema: Arc<Schema>,
     geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
-    let teryt_mapping = {
-        if download_teryt {
-            download_terc_mapping(
-                teryt_api_username.clone().unwrap().as_str(),
-                teryt_api_password.clone().unwrap().as_str(),
-            )?
-        } else {
-            get_terc_mapping(teryt_file_path.as_ref().unwrap())?
-        }
-    };
-
     let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
@@ -191,7 +195,7 @@ pub fn get_address_parser_2021_uncompressed(
         batch_size.clone(),
         output_format.clone(),
         dict,
-        teryt_mapping,
+        teryt_mapping.clone(),
         crs.clone(),
         arrow_schema.clone(),
         geoarrow_geom_type.clone(),
@@ -202,26 +206,12 @@ pub fn get_address_parser_2021_zip<'a>(
     archive: &'a mut ZipArchive<File>,
     batch_size: &usize,
     output_format: &OutputFormat,
-    download_teryt: bool,
-    teryt_api_username: &Option<String>,
-    teryt_api_password: &Option<String>,
-    teryt_file_path: &Option<PathBuf>,
+    teryt_mapping: &HashMap<String, Terc>,
     zip_file_index: usize,
     crs: &CRS,
     arrow_schema: Arc<Schema>,
     geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
-    let teryt_mapping = {
-        if download_teryt {
-            download_terc_mapping(
-                teryt_api_username.clone().unwrap().as_str(),
-                teryt_api_password.clone().unwrap().as_str(),
-            )?
-        } else {
-            get_terc_mapping(teryt_file_path.as_ref().unwrap())?
-        }
-    };
-
     let zip_file = archive
         .by_index(zip_file_index)
         .with_context(|| "Could not decompress file from ZIP archive.")?;
@@ -243,7 +233,7 @@ pub fn get_address_parser_2021_zip<'a>(
         batch_size.clone(),
         output_format.clone(),
         dict,
-        teryt_mapping,
+        teryt_mapping.clone(),
         crs.clone(),
         arrow_schema.clone(),
         geoarrow_geom_type.clone(),
@@ -501,6 +491,8 @@ mod tests {
     fn test_address_parser_2021_zip_csv() {
         let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
+        let teryt_mapping =
+            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
         let f = std::fs::File::open(&sample_file_path)
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
@@ -509,10 +501,7 @@ mod tests {
             &mut archive,
             &1,
             &OutputFormat::CSV,
-            false,
-            &None,
-            &None,
-            &Some(PathBuf::from(teryt_file_path)),
+            &teryt_mapping,
             1,
             &CRS::Epsg4326,
             crate::common::SCHEMA_CSV.clone(),

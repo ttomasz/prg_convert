@@ -73,6 +73,7 @@ struct PobierzKatalogTERCResponse {
     result: PobierzKatalogTERCResult,
 }
 
+#[derive(Clone)]
 pub struct Terc {
     pub voivodeship_teryt_id: String,
     pub voivodeship_name: String,
