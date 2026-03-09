@@ -887,3 +887,43 @@ fn test_build_dictionaries() {
     assert_eq!(street.kind, "plac");
     assert_eq!(street.name, "Plac Kasztanowy");
 }
+
+#[test]
+fn test_construct_full_name_rondo_with_prefix() {
+    let typ = "rondo";
+    let part1 = "rondo Grunwaldzkie".to_string();
+    let part2 = None;
+    let expected_name = "rondo Grunwaldzkie";
+    let name = construct_full_name_from_parts(&part1, &part2, &typ);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
+fn test_construct_full_name_rondo_without_prefix() {
+    let typ = "rondo";
+    let part1 = "Grunwaldzkie".to_string();
+    let part2 = None;
+    let expected_name = "rondo Grunwaldzkie";
+    let name = construct_full_name_from_parts(&part1, &part2, &typ);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
+fn test_construct_full_name_aleja_with_al_abbreviation() {
+    let typ = "aleja";
+    let part1 = "al. Grunwaldzka".to_string();
+    let part2 = None;
+    let expected_name = "al. Grunwaldzka";
+    let name = construct_full_name_from_parts(&part1, &part2, &typ);
+    assert_eq!(name, expected_name);
+}
+
+#[test]
+fn test_construct_full_name_aleja_without_prefix() {
+    let typ = "aleja";
+    let part1 = "Grunwaldzka".to_string();
+    let part2 = None;
+    let expected_name = "aleja Grunwaldzka";
+    let name = construct_full_name_from_parts(&part1, &part2, &typ);
+    assert_eq!(name, expected_name);
+}

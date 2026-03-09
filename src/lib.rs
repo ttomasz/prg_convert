@@ -245,6 +245,18 @@ mod tests {
     use super::*;
     use arrow::array::{Date32Array, Float64Array, StringArray, TimestampMillisecondArray};
     use arrow::compute::concat_batches;
+    use geoarrow::datatypes::CoordType;
+
+    fn make_geoparquet_geom_type() -> PointType {
+        PointType::new(
+            geoarrow::datatypes::Dimension::XY,
+            Arc::new(geoarrow::datatypes::Metadata::new(
+                geoarrow::datatypes::Crs::from_srid("4326".to_string()),
+                None,
+            )),
+        )
+        .with_coord_type(CoordType::Separated)
+    }
 
     #[test]
     fn test_address_parser_2012_zip_csv() {
@@ -739,5 +751,189 @@ mod tests {
             .downcast_ref()
             .unwrap();
         assert_eq!(&szerokosc_geograficzna, &expected_szerokosc_geograficzna);
+    }
+
+    #[test]
+    fn test_address_parser_2012_xml_csv() {
+        let file_path = PathBuf::from("fixtures/sample_model2012.xml");
+        let parser = get_address_parser_2012_uncompressed(
+            &file_path,
+            &100_000,
+            &OutputFormat::CSV,
+            &CRS::Epsg4326,
+            crate::common::SCHEMA_CSV.clone(),
+            &PointType::new(
+                geoarrow::datatypes::Dimension::XY,
+                Arc::new(geoarrow::datatypes::Metadata::new(
+                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
+                    None,
+                )),
+            ),
+        );
+        let batches: Vec<arrow::array::RecordBatch> = parser
+            .expect("Something wrong while creating parser object.")
+            .into_iter()
+            .collect();
+        let arrow_batch = concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches)
+            .expect("Error in concatenating batches");
+        assert_eq!(arrow_batch.num_rows(), 2);
+        assert_eq!(arrow_batch.num_columns(), 24);
+        let expected_lokalny_id = &StringArray::from(vec![
+            "fd9c9319-0a6a-44b4-972a-1e6c4ec0d4ca",
+            "5baa8bef-75ef-4241-a2fe-9d4137845693",
+        ]);
+        let lokalny_id: &StringArray = &arrow_batch
+            .column_by_name("lokalny_id")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&lokalny_id, &expected_lokalny_id);
+        let expected_teryt_wojewodztwo = &StringArray::from(vec!["08", "08"]);
+        let teryt_wojewodztwo: &StringArray = &arrow_batch
+            .column_by_name("teryt_wojewodztwo")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_wojewodztwo, &expected_teryt_wojewodztwo);
+    }
+
+    #[test]
+    fn test_address_parser_2021_xml_csv() {
+        let file_path = PathBuf::from("fixtures/sample_model2021.xml");
+        let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
+        let teryt_mapping =
+            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
+        let parser = get_address_parser_2021_uncompressed(
+            &file_path,
+            &100_000,
+            &OutputFormat::CSV,
+            &teryt_mapping,
+            &CRS::Epsg4326,
+            crate::common::SCHEMA_CSV.clone(),
+            &PointType::new(
+                geoarrow::datatypes::Dimension::XY,
+                Arc::new(geoarrow::datatypes::Metadata::new(
+                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
+                    None,
+                )),
+            ),
+        );
+        let batches: Vec<arrow::array::RecordBatch> = parser
+            .expect("Something wrong while creating parser object.")
+            .into_iter()
+            .collect();
+        let arrow_batch = concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches)
+            .expect("Error in concatenating batches");
+        assert_eq!(arrow_batch.num_rows(), 3);
+        assert_eq!(arrow_batch.num_columns(), 24);
+        let expected_teryt_gmina = &StringArray::from(vec!["0807043", "0805043", "0807023"]);
+        let teryt_gmina: &StringArray = &arrow_batch
+            .column_by_name("teryt_gmina")
+            .unwrap()
+            .as_any()
+            .downcast_ref()
+            .unwrap();
+        assert_eq!(&teryt_gmina, &expected_teryt_gmina);
+    }
+
+    #[test]
+    fn test_address_parser_2012_zip_geoparquet() {
+        let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
+        let geom_type = make_geoparquet_geom_type();
+        let geoparquet_schema = crate::common::get_geoparquet_schema(geom_type.clone());
+        let f = std::fs::File::open(&sample_file_path)
+            .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
+        let mut archive = ZipArchive::new(f)
+            .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
+        let parser = get_address_parser_2012_zip(
+            &mut archive,
+            &100_000,
+            &OutputFormat::GeoParquet,
+            0,
+            &CRS::Epsg4326,
+            geoparquet_schema.clone(),
+            &geom_type,
+        );
+        let batches: Vec<arrow::array::RecordBatch> = parser
+            .expect("Something wrong while creating parser object.")
+            .into_iter()
+            .collect();
+        let arrow_batch = concat_batches(&geoparquet_schema, &batches)
+            .expect("Error in concatenating batches");
+        assert_eq!(arrow_batch.num_rows(), 2);
+        assert_eq!(arrow_batch.num_columns(), 23);
+        let geometry_col = arrow_batch
+            .column_by_name("geometry")
+            .expect("Expected geometry column");
+        assert_eq!(geometry_col.null_count(), 0);
+    }
+
+    #[test]
+    fn test_address_parser_2021_zip_geoparquet() {
+        let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
+        let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
+        let teryt_mapping =
+            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
+        let geom_type = make_geoparquet_geom_type();
+        let geoparquet_schema = crate::common::get_geoparquet_schema(geom_type.clone());
+        let f = std::fs::File::open(&sample_file_path)
+            .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
+        let mut archive = ZipArchive::new(f)
+            .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
+        let parser = get_address_parser_2021_zip(
+            &mut archive,
+            &100_000,
+            &OutputFormat::GeoParquet,
+            &teryt_mapping,
+            1,
+            &CRS::Epsg4326,
+            geoparquet_schema.clone(),
+            &geom_type,
+        );
+        let batches: Vec<arrow::array::RecordBatch> = parser
+            .expect("Something wrong while creating parser object.")
+            .into_iter()
+            .collect();
+        let arrow_batch = concat_batches(&geoparquet_schema, &batches)
+            .expect("Error in concatenating batches");
+        assert_eq!(arrow_batch.num_rows(), 3);
+        assert_eq!(arrow_batch.num_columns(), 23);
+        let geometry_col = arrow_batch
+            .column_by_name("geometry")
+            .expect("Expected geometry column");
+        assert_eq!(geometry_col.null_count(), 0);
+    }
+
+    #[test]
+    fn test_address_parser_2012_zip_csv_multi_batch() {
+        let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
+        let f = std::fs::File::open(&sample_file_path)
+            .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
+        let mut archive = ZipArchive::new(f)
+            .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
+        let parser = get_address_parser_2012_zip(
+            &mut archive,
+            &1,
+            &OutputFormat::CSV,
+            0,
+            &CRS::Epsg4326,
+            crate::common::SCHEMA_CSV.clone(),
+            &PointType::new(
+                geoarrow::datatypes::Dimension::XY,
+                Arc::new(geoarrow::datatypes::Metadata::new(
+                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
+                    None,
+                )),
+            ),
+        );
+        let batches: Vec<arrow::array::RecordBatch> = parser
+            .expect("Something wrong while creating parser object.")
+            .into_iter()
+            .collect();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].num_rows(), 1);
+        assert_eq!(batches[1].num_rows(), 1);
     }
 }

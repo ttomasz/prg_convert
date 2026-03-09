@@ -110,7 +110,7 @@ pub struct FileRecord {
     pub decompressed_size: Option<u128>,               // only for FileType::ZIP
 }
 
-fn parse_input_paths(
+pub(crate) fn parse_input_paths(
     input_paths: &Vec<String>,
     schema_version: &SchemaVersion,
 ) -> anyhow::Result<Vec<FileRecord>> {
@@ -438,5 +438,169 @@ impl TryInto<ParsedArgs> for RawArgs {
             crs: crs,
             geoarrow_geom_type: geom_type,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::TryInto;
+
+    fn make_base_raw_args() -> RawArgs {
+        RawArgs {
+            input_paths: vec!["fixtures/sample_model2012.xml".to_string()],
+            output_path: PathBuf::from("/tmp/test_output.csv"),
+            output_format: "csv".to_string(),
+            schema_version: "2012".to_string(),
+            teryt_path: None,
+            teryt_download: None,
+            teryt_api_username: None,
+            teryt_api_password: None,
+            batch_size: None,
+            parquet_compression: None,
+            compression_level: None,
+            parquet_row_group_size: None,
+            parquet_version: None,
+            crs_epsg: None,
+        }
+    }
+
+    #[test]
+    fn test_parse_input_paths_xml_file() {
+        let result = parse_input_paths(
+            &vec!["fixtures/sample_model2012.xml".to_string()],
+            &prg_convert::SchemaVersion::Model2012,
+        );
+        let records = result.expect("Expected Ok result");
+        assert_eq!(records.len(), 1);
+        assert!(matches!(records[0].file_type, prg_convert::FileType::XML));
+        assert!(records[0].compressed_files.is_none());
+    }
+
+    #[test]
+    fn test_parse_input_paths_zip_file_model2012() {
+        let result = parse_input_paths(
+            &vec!["fixtures/PRG-punkty_adresowe.zip".to_string()],
+            &prg_convert::SchemaVersion::Model2012,
+        );
+        let records = result.expect("Expected Ok result");
+        assert_eq!(records.len(), 1);
+        assert!(matches!(records[0].file_type, prg_convert::FileType::ZIP));
+        let compressed_files = records[0]
+            .compressed_files
+            .as_ref()
+            .expect("Expected compressed files");
+        let xml_files: Vec<_> = compressed_files
+            .iter()
+            .filter(|f| f.name.ends_with(".xml"))
+            .collect();
+        let gml_files: Vec<_> = compressed_files
+            .iter()
+            .filter(|f| f.name.ends_with(".gml"))
+            .collect();
+        assert!(!xml_files.is_empty());
+        assert!(xml_files.iter().all(|f| f.to_be_parsed));
+        assert!(!gml_files.is_empty());
+        assert!(gml_files.iter().all(|f| !f.to_be_parsed));
+    }
+
+    #[test]
+    fn test_parse_input_paths_zip_file_model2021() {
+        let result = parse_input_paths(
+            &vec!["fixtures/PRG-punkty_adresowe.zip".to_string()],
+            &prg_convert::SchemaVersion::Model2021,
+        );
+        let records = result.expect("Expected Ok result");
+        assert_eq!(records.len(), 1);
+        let compressed_files = records[0]
+            .compressed_files
+            .as_ref()
+            .expect("Expected compressed files");
+        let xml_files: Vec<_> = compressed_files
+            .iter()
+            .filter(|f| f.name.ends_with(".xml"))
+            .collect();
+        let gml_files: Vec<_> = compressed_files
+            .iter()
+            .filter(|f| f.name.ends_with(".gml"))
+            .collect();
+        assert!(!gml_files.is_empty());
+        assert!(gml_files.iter().all(|f| f.to_be_parsed));
+        assert!(!xml_files.is_empty());
+        assert!(xml_files.iter().all(|f| !f.to_be_parsed));
+    }
+
+    #[test]
+    fn test_parse_input_paths_empty_glob_result() {
+        let result = parse_input_paths(
+            &vec!["fixtures/nonexistent_*.xml".to_string()],
+            &prg_convert::SchemaVersion::Model2012,
+        );
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(err_str.contains("Do the files exist"));
+    }
+
+    #[test]
+    fn test_try_into_invalid_schema_version() {
+        let args = RawArgs {
+            schema_version: "9999".to_string(),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(err_str.contains("unsupported schema version"));
+    }
+
+    #[test]
+    fn test_try_into_invalid_output_format() {
+        let args = RawArgs {
+            output_format: "excel".to_string(),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(err_str.contains("unsupported format"));
+    }
+
+    #[test]
+    fn test_try_into_schema_2021_missing_teryt() {
+        let args = RawArgs {
+            schema_version: "2021".to_string(),
+            teryt_path: None,
+            teryt_download: Some(false),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("2021") || err_str.contains("teryt") || err_str.contains("TERYT")
+        );
+    }
+
+    #[test]
+    fn test_try_into_download_teryt_missing_credentials() {
+        // Safety: test-only modification of env vars; tests run single-threaded within this process
+        unsafe {
+            std::env::remove_var("TERYT_API_USERNAME");
+            std::env::remove_var("TERYT_API_PASSWORD");
+        }
+        let args = RawArgs {
+            schema_version: "2021".to_string(),
+            teryt_path: None,
+            teryt_download: Some(true),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("credentials")
+                || err_str.contains("env")
+                || err_str.contains("teryt-download")
+        );
     }
 }

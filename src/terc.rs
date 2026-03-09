@@ -316,3 +316,20 @@ fn test_parse_api_response() {
     assert_eq!(k0201011.voivodeship_teryt_id, "02");
     assert_eq!(k0201011.voivodeship_name, "dolnośląskie");
 }
+
+
+#[test]
+fn test_get_terc_mapping_file_not_found() {
+    let result = get_terc_mapping(&PathBuf::from("fixtures/definitely_nonexistent.xml"));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_terc_mapping_unsupported_extension() {
+    let temp_file = tempfile::Builder::new()
+        .suffix(".csv")
+        .tempfile()
+        .expect("Failed to create temp file");
+    let result = get_terc_mapping(&temp_file.path().to_path_buf());
+    assert!(result.is_err());
+}
