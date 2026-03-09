@@ -25,3 +25,4 @@ target
 test_data/
 
 .env
+.worktrees/
