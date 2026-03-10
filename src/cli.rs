@@ -231,11 +231,15 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
                 );
             }
             FileType::ZIP => {
+                let decompressed_size_str = match file.decompressed_size {
+                    Some(size) => format!("{:.2} MB", size as f64 / 1024.0 / 1024.0),
+                    None => "unknown".to_string(),
+                };
                 println!(
-                    "    - {} (ZIP), size compressed: {:.2} MB, size uncompressed: {:.2} MB",
+                    "    - {} (ZIP), size compressed: {:.2} MB, size uncompressed: {}",
                     file.path.display(),
                     (file.size_in_bytes as f64 / 1024.0 / 1024.0),
-                    (file.decompressed_size.unwrap() as f64 / 1024.0 / 1024.0)
+                    decompressed_size_str
                 );
                 let compressed_files = file
                     .compressed_files
