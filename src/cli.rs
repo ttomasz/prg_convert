@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use clap::ArgAction;
-use tempfile::NamedTempFile;
 use geoarrow::datatypes::CoordType;
 use geoarrow::datatypes::Dimension;
 use geoarrow::datatypes::Metadata;
@@ -20,6 +19,7 @@ use prg_convert::common::CRS_2180;
 use prg_convert::common::CRS_4326;
 use prg_convert::common::SCHEMA_CSV;
 use prg_convert::common::get_geoparquet_schema;
+use tempfile::NamedTempFile;
 use zip::ZipArchive;
 
 use prg_convert::CRS;
@@ -216,10 +216,7 @@ pub fn download_prg_data() -> anyhow::Result<NamedTempFile> {
         .send()
         .with_context(|| format!("Failed to send download request to: {}", PRG_DOWNLOAD_URL))?;
     if !response.status().is_success() {
-        anyhow::bail!(
-            "Download request failed with status: {}",
-            response.status()
-        );
+        anyhow::bail!("Download request failed with status: {}", response.status());
     }
     println!("Download started, saving to temporary file...");
     std::io::copy(&mut response, &mut temp_file)
@@ -358,14 +355,10 @@ impl TryInto<ParsedArgs> for RawArgs {
         let download_data = self.download_data.unwrap_or(false);
         let has_input_paths = !self.input_paths.is_empty();
         if has_input_paths && download_data {
-            anyhow::bail!(
-                "Provide either --input-paths or --download-data, but not both."
-            );
+            anyhow::bail!("Provide either --input-paths or --download-data, but not both.");
         }
         if !has_input_paths && !download_data {
-            anyhow::bail!(
-                "Either --input-paths or --download-data must be provided."
-            );
+            anyhow::bail!("Either --input-paths or --download-data must be provided.");
         }
         let download_teryt_flag = {
             let mut flag = self.teryt_download.unwrap_or(false);
