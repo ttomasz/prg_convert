@@ -860,8 +860,8 @@ mod tests {
             .expect("Something wrong while creating parser object.")
             .into_iter()
             .collect();
-        let arrow_batch = concat_batches(&geoparquet_schema, &batches)
-            .expect("Error in concatenating batches");
+        let arrow_batch =
+            concat_batches(&geoparquet_schema, &batches).expect("Error in concatenating batches");
         assert_eq!(arrow_batch.num_rows(), 2);
         assert_eq!(arrow_batch.num_columns(), 23);
         let geometry_col = arrow_batch
@@ -896,8 +896,8 @@ mod tests {
             .expect("Something wrong while creating parser object.")
             .into_iter()
             .collect();
-        let arrow_batch = concat_batches(&geoparquet_schema, &batches)
-            .expect("Error in concatenating batches");
+        let arrow_batch =
+            concat_batches(&geoparquet_schema, &batches).expect("Error in concatenating batches");
         assert_eq!(arrow_batch.num_rows(), 3);
         assert_eq!(arrow_batch.num_columns(), 23);
         let geometry_col = arrow_batch

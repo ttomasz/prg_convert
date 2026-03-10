@@ -317,7 +317,6 @@ fn test_parse_api_response() {
     assert_eq!(k0201011.voivodeship_name, "dolnośląskie");
 }
 
-
 #[test]
 fn test_get_terc_mapping_file_not_found() {
     let result = get_terc_mapping(&PathBuf::from("fixtures/definitely_nonexistent.xml"));

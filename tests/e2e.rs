@@ -152,11 +152,19 @@ fn validate_csv(path: &Path, expected: &[ExpectedRow]) {
         assert_eq!(get("miejscowosc"), exp.miejscowosc, "row {i} miejscowosc");
         let ulica_val = get("ulica");
         assert_eq!(
-            if ulica_val.is_empty() { None } else { Some(ulica_val) },
+            if ulica_val.is_empty() {
+                None
+            } else {
+                Some(ulica_val)
+            },
             exp.ulica,
             "row {i} ulica"
         );
-        assert_eq!(get("kod_pocztowy"), exp.kod_pocztowy, "row {i} kod_pocztowy");
+        assert_eq!(
+            get("kod_pocztowy"),
+            exp.kod_pocztowy,
+            "row {i} kod_pocztowy"
+        );
         assert_eq!(get("gmina"), exp.gmina, "row {i} gmina");
 
         let x = parse_f64("x_epsg_2180");
@@ -204,12 +212,20 @@ fn validate_geoparquet(path: &Path, expected: &[ExpectedRow]) {
     let schema = batches[0].schema();
     let batch = concat_batches(&schema, &batches).expect("Failed to concat batches");
 
-    assert_eq!(batch.num_rows(), expected.len(), "GeoParquet row count mismatch");
+    assert_eq!(
+        batch.num_rows(),
+        expected.len(),
+        "GeoParquet row count mismatch"
+    );
 
     let geometry = batch
         .column_by_name("geometry")
         .expect("Expected geometry column");
-    assert_eq!(geometry.null_count(), 0, "Geometry column must have no nulls");
+    assert_eq!(
+        geometry.null_count(),
+        0,
+        "Geometry column must have no nulls"
+    );
 
     let lokalny_id: &StringArray = batch
         .column_by_name("lokalny_id")
@@ -280,7 +296,11 @@ fn run(
     expected: &[ExpectedRow],
     teryt_path: Option<&str>,
 ) {
-    let ext = if output_format == "csv" { "csv" } else { "parquet" };
+    let ext = if output_format == "csv" {
+        "csv"
+    } else {
+        "parquet"
+    };
     let output_file = tempfile::Builder::new()
         .suffix(&format!(".{ext}"))
         .tempfile()
@@ -342,12 +362,26 @@ fn test_e2e_schema2012_xml_csv_2180() {
 
 #[test]
 fn test_e2e_schema2012_xml_geoparquet_4326() {
-    run("2012", "4326", "geoparquet", MODEL_2012_XML, EXPECTED_2012, None);
+    run(
+        "2012",
+        "4326",
+        "geoparquet",
+        MODEL_2012_XML,
+        EXPECTED_2012,
+        None,
+    );
 }
 
 #[test]
 fn test_e2e_schema2012_xml_geoparquet_2180() {
-    run("2012", "2180", "geoparquet", MODEL_2012_XML, EXPECTED_2012, None);
+    run(
+        "2012",
+        "2180",
+        "geoparquet",
+        MODEL_2012_XML,
+        EXPECTED_2012,
+        None,
+    );
 }
 
 // --- Schema 2012, compressed ZIP ---
@@ -376,86 +410,198 @@ fn test_e2e_schema2012_zip_geoparquet_2180() {
 
 #[test]
 fn test_e2e_schema2021_xml_csv_4326() {
-    run("2021", "4326", "csv", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "4326",
+        "csv",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_xml_csv_2180() {
-    run("2021", "2180", "csv", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "2180",
+        "csv",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_xml_geoparquet_4326() {
-    run("2021", "4326", "geoparquet", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "4326",
+        "geoparquet",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_xml_geoparquet_2180() {
-    run("2021", "2180", "geoparquet", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "2180",
+        "geoparquet",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 // --- Schema 2021, compressed ZIP + TERYT XML ---
 
 #[test]
 fn test_e2e_schema2021_zip_csv_4326() {
-    run("2021", "4326", "csv", PRG_ZIP, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "4326",
+        "csv",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_zip_csv_2180() {
-    run("2021", "2180", "csv", PRG_ZIP, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "2180",
+        "csv",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_zip_geoparquet_4326() {
-    run("2021", "4326", "geoparquet", PRG_ZIP, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "4326",
+        "geoparquet",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_zip_geoparquet_2180() {
-    run("2021", "2180", "geoparquet", PRG_ZIP, EXPECTED_2021, Some(TERYT_XML));
+    run(
+        "2021",
+        "2180",
+        "geoparquet",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_XML),
+    );
 }
 
 // --- Schema 2021, uncompressed XML + TERYT ZIP ---
 
 #[test]
 fn test_e2e_schema2021_xml_teryt_zip_csv_4326() {
-    run("2021", "4326", "csv", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "4326",
+        "csv",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_xml_teryt_zip_csv_2180() {
-    run("2021", "2180", "csv", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "2180",
+        "csv",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_xml_teryt_zip_geoparquet_4326() {
-    run("2021", "4326", "geoparquet", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "4326",
+        "geoparquet",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_xml_teryt_zip_geoparquet_2180() {
-    run("2021", "2180", "geoparquet", MODEL_2021_XML, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "2180",
+        "geoparquet",
+        MODEL_2021_XML,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 // --- Schema 2021, compressed ZIP + TERYT ZIP ---
 
 #[test]
 fn test_e2e_schema2021_zip_teryt_zip_csv_4326() {
-    run("2021", "4326", "csv", PRG_ZIP, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "4326",
+        "csv",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_zip_teryt_zip_csv_2180() {
-    run("2021", "2180", "csv", PRG_ZIP, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "2180",
+        "csv",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_zip_teryt_zip_geoparquet_4326() {
-    run("2021", "4326", "geoparquet", PRG_ZIP, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "4326",
+        "geoparquet",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }
 
 #[test]
 fn test_e2e_schema2021_zip_teryt_zip_geoparquet_2180() {
-    run("2021", "2180", "geoparquet", PRG_ZIP, EXPECTED_2021, Some(TERYT_ZIP));
+    run(
+        "2021",
+        "2180",
+        "geoparquet",
+        PRG_ZIP,
+        EXPECTED_2021,
+        Some(TERYT_ZIP),
+    );
 }

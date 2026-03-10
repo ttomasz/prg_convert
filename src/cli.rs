@@ -580,9 +580,7 @@ mod tests {
         let result: anyhow::Result<ParsedArgs> = args.try_into();
         assert!(result.is_err());
         let err_str = format!("{}", result.err().unwrap());
-        assert!(
-            err_str.contains("2021") || err_str.contains("teryt") || err_str.contains("TERYT")
-        );
+        assert!(err_str.contains("2021") || err_str.contains("teryt") || err_str.contains("TERYT"));
     }
 
     #[test]
