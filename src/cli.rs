@@ -36,6 +36,8 @@ pub struct RawArgs {
         num_args = 1..,
     )]
     input_paths: Vec<String>,
+    #[arg(long = "download-data", action = ArgAction::SetTrue, help = "Download PRG address data from the official GUGiK URL instead of providing --input-paths. URL: https://integracja.gugik.gov.pl/PRG/pobierz.php?adresy_zbiorcze_gml")]
+    download_data: Option<bool>,
     #[arg(long = "output-path", help = "Output file path.")]
     output_path: std::path::PathBuf,
     #[arg(
@@ -197,6 +199,7 @@ pub(crate) fn parse_input_paths(
 pub struct ParsedArgs {
     pub input_paths: Vec<String>,
     pub parsed_paths: Vec<FileRecord>,
+    pub download_data: bool,
     pub output_path: PathBuf,
     pub download_teryt: bool,
     pub teryt_api_username: Option<String>,
@@ -313,6 +316,7 @@ impl TryInto<ParsedArgs> for RawArgs {
 
     fn try_into(self) -> anyhow::Result<ParsedArgs> {
         let batch_size = self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
+        let download_data = self.download_data.unwrap_or(false);
         let download_teryt_flag = {
             let mut flag = self.teryt_download.unwrap_or(false);
             if self.schema_version.to_lowercase() == "2012" && flag {
@@ -418,6 +422,7 @@ impl TryInto<ParsedArgs> for RawArgs {
         Ok(ParsedArgs {
             input_paths: self.input_paths,
             parsed_paths: parsed_paths,
+            download_data: download_data,
             output_path: self.output_path,
             download_teryt: download_teryt_flag,
             teryt_api_username: if teryt_api_username.is_empty() {
@@ -453,6 +458,7 @@ mod tests {
     fn make_base_raw_args() -> RawArgs {
         RawArgs {
             input_paths: vec!["fixtures/sample_model2012.xml".to_string()],
+            download_data: None,
             output_path: PathBuf::from("/tmp/test_output.csv"),
             output_format: "csv".to_string(),
             schema_version: "2012".to_string(),
