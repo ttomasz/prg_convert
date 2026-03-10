@@ -5,6 +5,7 @@ const MODEL_2012_XML: &str = "fixtures/sample_model2012.xml";
 const MODEL_2021_XML: &str = "fixtures/sample_model2021.xml";
 const PRG_ZIP: &str = "fixtures/PRG-punkty_adresowe.zip";
 const TERYT_XML: &str = "fixtures/TERC_Urzedowy_2025-11-18.xml";
+const TERYT_ZIP: &str = "fixtures/TERC_Urzedowy_2025-11-18.zip";
 
 fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_prg_convert"))
@@ -178,4 +179,48 @@ fn test_e2e_schema2021_zip_geoparquet_4326() {
 #[test]
 fn test_e2e_schema2021_zip_geoparquet_2180() {
     run("2021", "2180", "geoparquet", PRG_ZIP, 3, Some(TERYT_XML));
+}
+
+// --- Schema 2021, uncompressed XML + TERYT ZIP (3 rows) ---
+
+#[test]
+fn test_e2e_schema2021_xml_teryt_zip_csv_4326() {
+    run("2021", "4326", "csv", MODEL_2021_XML, 3, Some(TERYT_ZIP));
+}
+
+#[test]
+fn test_e2e_schema2021_xml_teryt_zip_csv_2180() {
+    run("2021", "2180", "csv", MODEL_2021_XML, 3, Some(TERYT_ZIP));
+}
+
+#[test]
+fn test_e2e_schema2021_xml_teryt_zip_geoparquet_4326() {
+    run("2021", "4326", "geoparquet", MODEL_2021_XML, 3, Some(TERYT_ZIP));
+}
+
+#[test]
+fn test_e2e_schema2021_xml_teryt_zip_geoparquet_2180() {
+    run("2021", "2180", "geoparquet", MODEL_2021_XML, 3, Some(TERYT_ZIP));
+}
+
+// --- Schema 2021, compressed ZIP + TERYT ZIP (3 rows) ---
+
+#[test]
+fn test_e2e_schema2021_zip_teryt_zip_csv_4326() {
+    run("2021", "4326", "csv", PRG_ZIP, 3, Some(TERYT_ZIP));
+}
+
+#[test]
+fn test_e2e_schema2021_zip_teryt_zip_csv_2180() {
+    run("2021", "2180", "csv", PRG_ZIP, 3, Some(TERYT_ZIP));
+}
+
+#[test]
+fn test_e2e_schema2021_zip_teryt_zip_geoparquet_4326() {
+    run("2021", "4326", "geoparquet", PRG_ZIP, 3, Some(TERYT_ZIP));
+}
+
+#[test]
+fn test_e2e_schema2021_zip_teryt_zip_geoparquet_2180() {
+    run("2021", "2180", "geoparquet", PRG_ZIP, 3, Some(TERYT_ZIP));
 }
