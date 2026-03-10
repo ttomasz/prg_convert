@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::fs::File;
+use std::io::Seek;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -221,6 +222,9 @@ pub fn download_prg_data() -> anyhow::Result<NamedTempFile> {
     std::io::copy(&mut response, &mut temp_file)
         .with_context(|| "Failed to stream download to temporary file.")?;
     println!("Download complete.");
+    temp_file
+        .seek(std::io::SeekFrom::Start(0))
+        .with_context(|| "Failed to seek to start of temporary file after download.")?;
     Ok(temp_file)
 }
 
