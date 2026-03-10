@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use clap::ArgAction;
+use tempfile::NamedTempFile;
 use geoarrow::datatypes::CoordType;
 use geoarrow::datatypes::Dimension;
 use geoarrow::datatypes::Metadata;
@@ -194,6 +195,33 @@ pub(crate) fn parse_input_paths(
         anyhow::bail!("Could not read input files. Do the files exist? Are the paths correct?");
     }
     Ok(paths)
+}
+
+pub const PRG_DOWNLOAD_URL: &str =
+    "https://integracja.gugik.gov.pl/PRG/pobierz.php?adresy_zbiorcze_gml";
+
+pub fn download_prg_data() -> anyhow::Result<NamedTempFile> {
+    let mut temp_file = tempfile::Builder::new()
+        .suffix(".zip")
+        .tempfile()
+        .with_context(|| "Failed to create temporary file for download.")?;
+    let client = reqwest::blocking::Client::new();
+    println!("Sending download request to: {}", PRG_DOWNLOAD_URL);
+    let mut response = client
+        .get(PRG_DOWNLOAD_URL)
+        .send()
+        .with_context(|| format!("Failed to send download request to: {}", PRG_DOWNLOAD_URL))?;
+    if !response.status().is_success() {
+        anyhow::bail!(
+            "Download request failed with status: {}",
+            response.status()
+        );
+    }
+    println!("Download started, saving to temporary file...");
+    std::io::copy(&mut response, &mut temp_file)
+        .with_context(|| "Failed to stream download to temporary file.")?;
+    println!("Download complete.");
+    Ok(temp_file)
 }
 
 pub struct ParsedArgs {
