@@ -206,7 +206,10 @@ pub fn download_prg_data() -> anyhow::Result<NamedTempFile> {
         .suffix(".zip")
         .tempfile()
         .with_context(|| "Failed to create temporary file for download.")?;
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(3600))
+        .build()
+        .with_context(|| "Failed to build HTTP client.")?;
     println!("Sending download request to: {}", PRG_DOWNLOAD_URL);
     let mut response = client
         .get(PRG_DOWNLOAD_URL)
@@ -473,7 +476,7 @@ impl TryInto<ParsedArgs> for RawArgs {
         Ok(ParsedArgs {
             input_paths: self.input_paths,
             parsed_paths: parsed_paths,
-            download_data: download_data,
+            download_data,
             output_path: self.output_path,
             download_teryt: download_teryt_flag,
             teryt_api_username: if teryt_api_username.is_empty() {
