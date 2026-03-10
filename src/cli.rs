@@ -317,6 +317,17 @@ impl TryInto<ParsedArgs> for RawArgs {
     fn try_into(self) -> anyhow::Result<ParsedArgs> {
         let batch_size = self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
         let download_data = self.download_data.unwrap_or(false);
+        let has_input_paths = !self.input_paths.is_empty();
+        if has_input_paths && download_data {
+            anyhow::bail!(
+                "Provide either --input-paths or --download-data, but not both."
+            );
+        }
+        if !has_input_paths && !download_data {
+            anyhow::bail!(
+                "Either --input-paths or --download-data must be provided."
+            );
+        }
         let download_teryt_flag = {
             let mut flag = self.teryt_download.unwrap_or(false);
             if self.schema_version.to_lowercase() == "2012" && flag {
@@ -418,7 +429,11 @@ impl TryInto<ParsedArgs> for RawArgs {
             OutputFormat::CSV => SCHEMA_CSV.clone(),
             OutputFormat::GeoParquet => get_geoparquet_schema(geom_type.clone()),
         };
-        let parsed_paths = parse_input_paths(&self.input_paths, &schema_version)?;
+        let parsed_paths = if download_data {
+            vec![]
+        } else {
+            parse_input_paths(&self.input_paths, &schema_version)?
+        };
         Ok(ParsedArgs {
             input_paths: self.input_paths,
             parsed_paths: parsed_paths,
@@ -587,6 +602,39 @@ mod tests {
         assert!(result.is_err());
         let err_str = format!("{}", result.err().unwrap());
         assert!(err_str.contains("2021") || err_str.contains("teryt") || err_str.contains("TERYT"));
+    }
+
+    #[test]
+    fn test_try_into_both_input_paths_and_download_data() {
+        let args = RawArgs {
+            download_data: Some(true),
+            ..make_base_raw_args() // make_base_raw_args has non-empty input_paths
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("input-paths") || err_str.contains("download-data"),
+            "Error message was: {}",
+            err_str
+        );
+    }
+
+    #[test]
+    fn test_try_into_neither_input_paths_nor_download_data() {
+        let args = RawArgs {
+            input_paths: vec![],
+            download_data: None,
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("input-paths") || err_str.contains("download-data"),
+            "Error message was: {}",
+            err_str
+        );
     }
 
     #[test]
