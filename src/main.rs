@@ -159,9 +159,23 @@ fn parse_file(
 fn main() -> Result<()> {
     let start_time = std::time::Instant::now();
     let args = cli::RawArgs::parse();
-    let parsed_args: cli::ParsedArgs = args.try_into().expect("Could not parse args.");
+    let mut parsed_args: cli::ParsedArgs = args.try_into().expect("Could not parse args.");
 
     cli::print_parsed_args(&parsed_args);
+
+    // Download data if requested, keeping the temp file alive for the duration of processing
+    let _temp_file;
+    let files_to_process: Vec<cli::FileRecord>;
+    if parsed_args.download_data {
+        println!("⬇️  Downloading PRG data...");
+        let temp = cli::download_prg_data()?;
+        let path_str = temp.path().to_string_lossy().to_string();
+        files_to_process = cli::parse_input_paths(&vec![path_str], &parsed_args.schema_version)?;
+        _temp_file = Some(temp);
+    } else {
+        files_to_process = std::mem::take(&mut parsed_args.parsed_paths);
+        _temp_file = None;
+    }
 
     let mut file_counter = 1;
     let mut total_row_count = 0;
@@ -205,7 +219,7 @@ fn main() -> Result<()> {
         }
     };
 
-    let num_files_to_process = &parsed_args.parsed_paths.len();
+    let num_files_to_process = &files_to_process.len();
     let teryt_mapping = match &parsed_args.schema_version {
         SchemaVersion::Model2012 => None,
         SchemaVersion::Model2021 => Some(get_teryt_mapping(
@@ -215,7 +229,7 @@ fn main() -> Result<()> {
             &parsed_args.teryt_path,
         )?),
     };
-    for file in &parsed_args.parsed_paths {
+    for file in &files_to_process {
         total_file_size += &file.size_in_bytes;
 
         println!(
