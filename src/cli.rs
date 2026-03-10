@@ -251,51 +251,55 @@ pub struct ParsedArgs {
 
 pub fn print_parsed_args(parsed_args: &ParsedArgs) {
     println!("⚙️  Parameters:");
-    println!("  Input paths/patterns:");
-    for path in &parsed_args.input_paths {
-        println!("    - {}", path);
-    }
-    println!("  Input:");
-    for file in &parsed_args.parsed_paths {
-        match file.file_type {
-            FileType::XML => {
-                println!(
-                    "    - {} (XML), size: {:.2} MB",
-                    file.path.display(),
-                    (file.size_in_bytes as f64 / 1024.0 / 1024.0)
-                );
-            }
-            FileType::ZIP => {
-                let decompressed_size_str = match file.decompressed_size {
-                    Some(size) => format!("{:.2} MB", size as f64 / 1024.0 / 1024.0),
-                    None => "unknown".to_string(),
-                };
-                println!(
-                    "    - {} (ZIP), size compressed: {:.2} MB, size uncompressed: {}",
-                    file.path.display(),
-                    (file.size_in_bytes as f64 / 1024.0 / 1024.0),
-                    decompressed_size_str
-                );
-                let compressed_files = file
-                    .compressed_files
-                    .as_ref()
-                    .expect("No files inside ZIP.");
-                for compressed_file in compressed_files {
-                    let status_emoji = match compressed_file.to_be_parsed {
-                        true => "✅",
-                        false => "⛔️",
-                    };
+    if parsed_args.download_data {
+        println!("  Input: download from URL: {}", PRG_DOWNLOAD_URL);
+    } else {
+        println!("  Input paths/patterns:");
+        for path in &parsed_args.input_paths {
+            println!("    - {}", path);
+        }
+        println!("  Input:");
+        for file in &parsed_args.parsed_paths {
+            match file.file_type {
+                FileType::XML => {
                     println!(
-                        "        - {} idx: {}, {}, size compressed: {:.2} MB, size uncompressed: {:.2} MB",
-                        status_emoji,
-                        compressed_file.index,
-                        compressed_file.name,
-                        (compressed_file.compressed_size as f64 / 1024.0 / 1024.0),
-                        (compressed_file.uncompressed_size as f64 / 1024.0 / 1024.0)
+                        "    - {} (XML), size: {:.2} MB",
+                        file.path.display(),
+                        (file.size_in_bytes as f64 / 1024.0 / 1024.0)
                     );
                 }
-            }
-        };
+                FileType::ZIP => {
+                    let decompressed_size_str = match file.decompressed_size {
+                        Some(size) => format!("{:.2} MB", size as f64 / 1024.0 / 1024.0),
+                        None => "unknown".to_string(),
+                    };
+                    println!(
+                        "    - {} (ZIP), size compressed: {:.2} MB, size uncompressed: {}",
+                        file.path.display(),
+                        (file.size_in_bytes as f64 / 1024.0 / 1024.0),
+                        decompressed_size_str
+                    );
+                    let compressed_files = file
+                        .compressed_files
+                        .as_ref()
+                        .expect("No files inside ZIP.");
+                    for compressed_file in compressed_files {
+                        let status_emoji = match compressed_file.to_be_parsed {
+                            true => "✅",
+                            false => "⛔️",
+                        };
+                        println!(
+                            "        - {} idx: {}, {}, size compressed: {:.2} MB, size uncompressed: {:.2} MB",
+                            status_emoji,
+                            compressed_file.index,
+                            compressed_file.name,
+                            (compressed_file.compressed_size as f64 / 1024.0 / 1024.0),
+                            (compressed_file.uncompressed_size as f64 / 1024.0 / 1024.0)
+                        );
+                    }
+                }
+            };
+        }
     }
     println!("  Output file: {}", parsed_args.output_path.display());
     println!("  Output file format: {}", parsed_args.output_format);
