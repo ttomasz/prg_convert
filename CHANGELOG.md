@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.4] - 2026-03-25
+
+### Added
+
+- added option to automatically download PRG data file by using flag `--download-data` (instead of `--input-paths`). You can specify path where the file should be downloaded, otherwise a temporary file will be created.
+
 ## [v0.6.3] - 2026-01-11
 
 ### Added
