@@ -38,8 +38,8 @@ pub struct RawArgs {
         num_args = 1..,
     )]
     input_paths: Vec<String>,
-    #[arg(long = "download-data", action = ArgAction::SetTrue, help = "Download PRG address data from the official GUGiK URL instead of providing --input-paths. URL: https://integracja.gugik.gov.pl/PRG/pobierz.php?adresy_zbiorcze_gml")]
-    download_data: Option<bool>,
+    #[arg(long = "download-data", num_args = 0..=1, default_missing_value = "", help = "Download PRG address data from the official GUGiK URL instead of providing --input-paths. Optionally provide a file path to save the downloaded file to (e.g. --download-data /tmp/prg.zip). If no path is given, a temporary file is used. URL: https://integracja.gugik.gov.pl/PRG/pobierz.php?adresy_zbiorcze_gml")]
+    download_data: Option<String>,
     #[arg(long = "output-path", help = "Output file path.")]
     output_path: std::path::PathBuf,
     #[arg(
@@ -201,11 +201,9 @@ pub(crate) fn parse_input_paths(
 pub const PRG_DOWNLOAD_URL: &str =
     "https://integracja.gugik.gov.pl/PRG/pobierz.php?adresy_zbiorcze_gml";
 
-pub fn download_prg_data() -> anyhow::Result<NamedTempFile> {
-    let mut temp_file = tempfile::Builder::new()
-        .suffix(".zip")
-        .tempfile()
-        .with_context(|| "Failed to create temporary file for download.")?;
+pub fn download_prg_data(
+    save_path: Option<&std::path::Path>,
+) -> anyhow::Result<Option<NamedTempFile>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(3600))
         .build()
@@ -218,20 +216,35 @@ pub fn download_prg_data() -> anyhow::Result<NamedTempFile> {
     if !response.status().is_success() {
         anyhow::bail!("Download request failed with status: {}", response.status());
     }
-    println!("Download started, saving to temporary file...");
-    std::io::copy(&mut response, &mut temp_file)
-        .with_context(|| "Failed to stream download to temporary file.")?;
-    println!("Download complete.");
-    temp_file
-        .seek(std::io::SeekFrom::Start(0))
-        .with_context(|| "Failed to seek to start of temporary file after download.")?;
-    Ok(temp_file)
+    if let Some(path) = save_path {
+        println!("Download started, saving to: {}", path.display());
+        let mut file = File::create(path)
+            .with_context(|| format!("Failed to create file: {}", path.display()))?;
+        std::io::copy(&mut response, &mut file)
+            .with_context(|| format!("Failed to stream download to: {}", path.display()))?;
+        println!("Download complete.");
+        Ok(None)
+    } else {
+        let mut temp_file = tempfile::Builder::new()
+            .suffix(".zip")
+            .tempfile()
+            .with_context(|| "Failed to create temporary file for download.")?;
+        println!("Download started, saving to temporary file...");
+        std::io::copy(&mut response, &mut temp_file)
+            .with_context(|| "Failed to stream download to temporary file.")?;
+        println!("Download complete.");
+        temp_file
+            .seek(std::io::SeekFrom::Start(0))
+            .with_context(|| "Failed to seek to start of temporary file after download.")?;
+        Ok(Some(temp_file))
+    }
 }
 
 pub struct ParsedArgs {
     pub input_paths: Vec<String>,
     pub parsed_paths: Vec<FileRecord>,
     pub download_data: bool,
+    pub download_data_path: Option<PathBuf>,
     pub output_path: PathBuf,
     pub download_teryt: bool,
     pub teryt_api_username: Option<String>,
@@ -253,6 +266,10 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
     println!("⚙️  Parameters:");
     if parsed_args.download_data {
         println!("  Input: download from URL: {}", PRG_DOWNLOAD_URL);
+        match &parsed_args.download_data_path {
+            Some(path) => println!("  Download save path: {}", path.display()),
+            None => println!("  Download save path: temporary file"),
+        }
     } else {
         println!("  Input paths/patterns:");
         for path in &parsed_args.input_paths {
@@ -352,7 +369,12 @@ impl TryInto<ParsedArgs> for RawArgs {
 
     fn try_into(self) -> anyhow::Result<ParsedArgs> {
         let batch_size = self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
-        let download_data = self.download_data.unwrap_or(false);
+        let download_data = self.download_data.is_some();
+        let download_data_path = self
+            .download_data
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from);
         let has_input_paths = !self.input_paths.is_empty();
         if has_input_paths && download_data {
             anyhow::bail!("Provide either --input-paths or --download-data, but not both.");
@@ -470,6 +492,7 @@ impl TryInto<ParsedArgs> for RawArgs {
             input_paths: self.input_paths,
             parsed_paths: parsed_paths,
             download_data,
+            download_data_path,
             output_path: self.output_path,
             download_teryt: download_teryt_flag,
             teryt_api_username: if teryt_api_username.is_empty() {
@@ -639,7 +662,7 @@ mod tests {
     #[test]
     fn test_try_into_both_input_paths_and_download_data() {
         let args = RawArgs {
-            download_data: Some(true),
+            download_data: Some(String::new()),
             ..make_base_raw_args() // make_base_raw_args has non-empty input_paths
         };
         let result: anyhow::Result<ParsedArgs> = args.try_into();
@@ -689,6 +712,181 @@ mod tests {
             err_str.contains("credentials")
                 || err_str.contains("env")
                 || err_str.contains("teryt-download")
+        );
+    }
+
+    // --- download_data with optional path ---
+
+    #[test]
+    fn test_try_into_download_data_flag_without_path() {
+        let args = RawArgs {
+            input_paths: vec![],
+            download_data: Some(String::new()),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        let parsed = result.expect("Expected Ok result");
+        assert!(parsed.download_data);
+        assert!(parsed.download_data_path.is_none());
+    }
+
+    #[test]
+    fn test_try_into_download_data_flag_with_path() {
+        let args = RawArgs {
+            input_paths: vec![],
+            download_data: Some("/tmp/prg.zip".to_string()),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        let parsed = result.expect("Expected Ok result");
+        assert!(parsed.download_data);
+        assert_eq!(
+            parsed.download_data_path,
+            Some(PathBuf::from("/tmp/prg.zip"))
+        );
+    }
+
+    #[test]
+    fn test_try_into_download_data_with_path_and_input_paths() {
+        let args = RawArgs {
+            download_data: Some("/tmp/prg.zip".to_string()),
+            ..make_base_raw_args() // has non-empty input_paths
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("input-paths") || err_str.contains("download-data"),
+            "Error message was: {}",
+            err_str
+        );
+    }
+
+    // --- happy path tests ---
+
+    #[test]
+    fn test_try_into_valid_model2012() {
+        let args = make_base_raw_args();
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        let parsed = result.expect("Expected Ok result");
+        assert!(matches!(parsed.schema_version, SchemaVersion::Model2012));
+        assert!(matches!(parsed.output_format, OutputFormat::CSV));
+        assert!(!parsed.download_data);
+        assert!(parsed.download_data_path.is_none());
+        assert!(!parsed.download_teryt);
+        assert_eq!(parsed.batch_size, DEFAULT_BATCH_SIZE);
+    }
+
+    #[test]
+    fn test_try_into_valid_model2021_with_teryt_path() {
+        let args = RawArgs {
+            schema_version: "2021".to_string(),
+            teryt_path: Some(PathBuf::from("fixtures/TERC_Urzedowy_2025-11-18.xml")),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        let parsed = result.expect("Expected Ok result");
+        assert!(matches!(parsed.schema_version, SchemaVersion::Model2021));
+        assert!(!parsed.download_teryt);
+        assert_eq!(
+            parsed.teryt_path,
+            Some(PathBuf::from("fixtures/TERC_Urzedowy_2025-11-18.xml"))
+        );
+    }
+
+    // --- invalid parquet/crs options ---
+
+    #[test]
+    fn test_try_into_invalid_parquet_compression() {
+        let args = RawArgs {
+            parquet_compression: Some("lz4".to_string()),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("compression") || err_str.contains("Unexpected"),
+            "Error message was: {}",
+            err_str
+        );
+    }
+
+    #[test]
+    fn test_try_into_invalid_parquet_version() {
+        let args = RawArgs {
+            parquet_version: Some("v3".to_string()),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("version") || err_str.contains("Unexpected"),
+            "Error message was: {}",
+            err_str
+        );
+    }
+
+    #[test]
+    fn test_try_into_invalid_crs_epsg() {
+        let args = RawArgs {
+            crs_epsg: Some(3857),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("EPSG") || err_str.contains("Unrecognized"),
+            "Error message was: {}",
+            err_str
+        );
+    }
+
+    // --- download-teryt with schema 2012 warning ---
+
+    #[test]
+    fn test_try_into_download_teryt_with_schema_2012_is_downgraded() {
+        let args = RawArgs {
+            schema_version: "2012".to_string(),
+            teryt_download: Some(true),
+            ..make_base_raw_args()
+        };
+        let result: anyhow::Result<ParsedArgs> = args.try_into();
+        let parsed = result.expect("Expected Ok result");
+        assert!(!parsed.download_teryt);
+    }
+
+    // --- parse_input_paths edge cases ---
+
+    #[test]
+    fn test_parse_input_paths_directory() {
+        let result = parse_input_paths(
+            &vec!["fixtures".to_string()],
+            &prg_convert::SchemaVersion::Model2012,
+        );
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("directory"),
+            "Error message was: {}",
+            err_str
+        );
+    }
+
+    #[test]
+    fn test_parse_input_paths_unsupported_extension() {
+        let result = parse_input_paths(
+            &vec!["Cargo.toml".to_string()],
+            &prg_convert::SchemaVersion::Model2012,
+        );
+        assert!(result.is_err());
+        let err_str = format!("{}", result.err().unwrap());
+        assert!(
+            err_str.contains("extension"),
+            "Error message was: {}",
+            err_str
         );
     }
 }

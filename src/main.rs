@@ -168,10 +168,15 @@ fn main() -> Result<()> {
     let files_to_process: Vec<cli::FileRecord>;
     if parsed_args.download_data {
         println!("⬇️  Downloading PRG data...");
-        let temp = cli::download_prg_data()?;
-        let path_str = temp.path().to_string_lossy().to_string();
-        files_to_process = cli::parse_input_paths(&vec![path_str], &parsed_args.schema_version)?;
-        _temp_file = Some(temp);
+        let temp = cli::download_prg_data(parsed_args.download_data_path.as_deref())?;
+        let download_path = match (&parsed_args.download_data_path, &temp) {
+            (Some(path), _) => path.to_string_lossy().to_string(),
+            (None, Some(t)) => t.path().to_string_lossy().to_string(),
+            _ => unreachable!(),
+        };
+        files_to_process =
+            cli::parse_input_paths(&vec![download_path], &parsed_args.schema_version)?;
+        _temp_file = temp;
     } else {
         files_to_process = std::mem::take(&mut parsed_args.parsed_paths);
         _temp_file = None;
