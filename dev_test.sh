@@ -25,3 +25,5 @@ cargo run --release -- --schema-version 2021 --batch-size 300000 --output-format
 cargo run --release -- --schema-version 2021 --batch-size 300000 --output-format geoparquet --crs-epsg 2180 --input-paths test_data/lubuskie_nowe_2026-01-10.gml --output-path test_data/lubuskie_nowe_2026-01-10_2180.parquet --download-teryt
 cargo run --release -- --schema-version 2021 --batch-size 300000 --output-format geoparquet --crs-epsg 4326 --input-paths test_data/PRG-punkty_adresowe_2026-01-10.zip --output-path test_data/prg_stare_2026-01-10_4326.parquet --download-teryt
 cargo run --release -- --schema-version 2021 --batch-size 300000 --output-format geoparquet --crs-epsg 2180 --input-paths test_data/PRG-punkty_adresowe_2026-01-10.zip --output-path test_data/prg_stare_2026-01-10_2180.parquet --download-teryt
+
+cargo run --release -- --schema-version 2021 --batch-size 300000 --output-format geoparquet --crs-epsg 2180 --output-path test_data/prg_dl_2180.parquet --download-teryt --download-data test_data/prg_dl.zip
