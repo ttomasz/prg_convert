@@ -19,13 +19,15 @@ Narzędzie do konwersji plików XML/GML z adresami z Państwowego Rejestru Grani
 - ✅ Opcja zapisu GeoParquet w EPSG:4326
 - Zapis do FlatGeoBuf
 - Zapis do GeoJSON
-- Pobieranie pliku ZIP z adresami z Geoportalu
+- ✅ Pobieranie pliku ZIP z adresami z Geoportalu (od wersji 0.6.4)
 - ✅ Pobieranie pliku ZIP ze słownikami TERYT z API GUS
 
 ## Obsługa
 Pobierz plik zip (Windows) lub tar.gz (Linuks) z zakładki [Releases](https://github.com/ttomasz/prg_convert/releases) i rozpakuj go.
 
 Uruchom plik w terminalu/wierszu poleceń wraz z odpowiednimi flagami wskazującymi lokalizację plików wejściowych i wyjściowych. Możesz użyć flagi `--help` żeby zobaczyć dostępne opcje.
+
+Narzędzie może automatycznie pobrać najnowszy plik z adresami z Geoportalu jeżeli użyjesz flagi `--download-data`.
 
 Przykład:
 ```ps
