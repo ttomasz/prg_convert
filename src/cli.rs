@@ -473,12 +473,12 @@ impl TryInto<ParsedArgs> for RawArgs {
             }
         };
         let geoarrow_crs = match crs {
-            CRS::Epsg2180 => CRS_2180,
-            CRS::Epsg4326 => CRS_4326,
+            CRS::Epsg2180 => CRS_2180.clone(),
+            CRS::Epsg4326 => CRS_4326.clone(),
         };
-        let geoarrow_metadata = Arc::new(Metadata::new(geoarrow_crs.clone(), None));
-        let geom_type = PointType::new(Dimension::XY, geoarrow_metadata.clone())
-            .with_coord_type(CoordType::Separated);
+        let geoarrow_metadata = Arc::new(Metadata::new(geoarrow_crs, None));
+        let geom_type =
+            PointType::new(Dimension::XY, geoarrow_metadata).with_coord_type(CoordType::Separated);
         let arrow_schema = match output_format {
             OutputFormat::CSV => SCHEMA_CSV.clone(),
             OutputFormat::GeoParquet => get_geoparquet_schema(geom_type.clone()),

@@ -16,9 +16,9 @@ use geo_types::Point;
 use geoarrow::array::GeoArrowArray;
 use geoarrow::array::PointBuilder;
 use geoarrow::datatypes::PointType;
-use once_cell::sync::Lazy;
 use quick_xml::Reader;
 use quick_xml::events::Event;
+use std::sync::LazyLock;
 
 use crate::CRS;
 use crate::CoordOrder;
@@ -54,7 +54,7 @@ pub struct Mappings {
     street: HashMap<String, Street>,
 }
 
-static CITY_TYPE: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
+static CITY_TYPE: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     let mut mapping = HashMap::new();
     mapping.insert("02", "kolonia");
     mapping.insert("03", "przysiółek");
@@ -71,7 +71,7 @@ static CITY_TYPE: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     mapping
 });
 
-static STREET_TYPE: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
+static STREET_TYPE: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     let mut mapping = HashMap::new();
     mapping.insert("1", ""); // originally: ulica, which is default type and doesn't require to be provided
     mapping.insert("3", "plac");
