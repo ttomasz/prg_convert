@@ -202,7 +202,7 @@ fn main() -> Result<()> {
         ),
         OutputFormat::GeoParquet => {
             let props = WriterProperties::builder()
-                .set_max_row_group_size(parsed_args.parquet_row_group_size)
+                .set_max_row_group_row_count(Some(parsed_args.parquet_row_group_size))
                 .set_writer_version(parsed_args.parquet_version)
                 .set_compression(parsed_args.parquet_compression)
                 .build();
