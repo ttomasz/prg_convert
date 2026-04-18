@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.6.5] - 
+
+### Changed
+
+- updated arrow from v56 to v58
+- refactored code so CLI dependencies are not required if using the project as library in another project
+
 ## [v0.6.4] - 2026-03-25
 
 ### Added
