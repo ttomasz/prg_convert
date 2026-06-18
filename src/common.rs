@@ -8,6 +8,9 @@ use arrow::datatypes::Field;
 use arrow::datatypes::Schema;
 use arrow::datatypes::TimeUnit;
 use chrono::NaiveDate;
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono_tz::Europe::Warsaw;
 use geoarrow::datatypes::Crs;
 use geoarrow::datatypes::PointType;
 use std::sync::LazyLock;
@@ -179,6 +182,54 @@ pub fn parse_gml_pos(
             text_trimmed
         );
     }
+}
+
+/// Interpret a naive datetime as `Europe/Warsaw` wall-clock time and return the
+/// corresponding UTC instant as epoch milliseconds.
+///
+/// Uses the IANA tz database so winter (CET, +01:00) and summer (CEST, +02:00)
+/// are handled correctly. On an ambiguous local time (the autumn DST overlap)
+/// the earlier of the two instants is chosen; a non-existent local time (the
+/// spring-forward gap) returns an error.
+pub fn warsaw_naive_to_utc_millis(naive: NaiveDateTime) -> anyhow::Result<i64> {
+    let dt = Warsaw
+        .from_local_datetime(&naive)
+        .earliest()
+        .with_context(|| {
+            format!(
+                "Local time `{}` does not exist in Europe/Warsaw (DST spring-forward gap).",
+                naive
+            )
+        })?;
+    Ok(dt.timestamp() * 1000)
+}
+
+#[test]
+fn test_warsaw_naive_to_utc_millis_summer() {
+    // 2025-10-14 14:04:04 Warsaw is CEST (+02:00) -> 12:04:04 UTC
+    let naive = chrono::NaiveDate::from_ymd_opt(2025, 10, 14)
+        .unwrap()
+        .and_hms_opt(14, 4, 4)
+        .unwrap();
+    let expected = chrono::DateTime::parse_from_rfc3339("2025-10-14T12:04:04Z")
+        .unwrap()
+        .timestamp()
+        * 1000;
+    assert_eq!(warsaw_naive_to_utc_millis(naive).unwrap(), expected);
+}
+
+#[test]
+fn test_warsaw_naive_to_utc_millis_winter() {
+    // 2025-11-06 15:01:26 Warsaw is CET (+01:00) -> 14:01:26 UTC
+    let naive = chrono::NaiveDate::from_ymd_opt(2025, 11, 6)
+        .unwrap()
+        .and_hms_opt(15, 1, 26)
+        .unwrap();
+    let expected = chrono::DateTime::parse_from_rfc3339("2025-11-06T14:01:26Z")
+        .unwrap()
+        .timestamp()
+        * 1000;
+    assert_eq!(warsaw_naive_to_utc_millis(naive).unwrap(), expected);
 }
 
 #[test]
