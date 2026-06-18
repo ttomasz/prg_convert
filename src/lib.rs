@@ -86,11 +86,6 @@ impl std::fmt::Display for CRS {
     }
 }
 
-pub struct Writer {
-    pub csv: Option<arrow::csv::writer::Writer<std::fs::File>>,
-    pub geoparquet: Option<parquet::arrow::arrow_writer::ArrowWriter<std::fs::File>>,
-}
-
 fn get_xml_reader_from_uncompressed_file(
     path: &PathBuf,
 ) -> anyhow::Result<Reader<BufReader<File>>> {
