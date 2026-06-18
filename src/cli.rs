@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::Seek;
 use std::path::PathBuf;
@@ -364,18 +363,18 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
     println!("----------------------------------------");
 }
 
-impl TryInto<ParsedArgs> for RawArgs {
+impl TryFrom<RawArgs> for ParsedArgs {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> anyhow::Result<ParsedArgs> {
-        let batch_size = self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
-        let download_data = self.download_data.is_some();
-        let download_data_path = self
+    fn try_from(value: RawArgs) -> anyhow::Result<ParsedArgs> {
+        let batch_size = value.batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
+        let download_data = value.download_data.is_some();
+        let download_data_path = value
             .download_data
             .as_deref()
             .filter(|s| !s.is_empty())
             .map(PathBuf::from);
-        let has_input_paths = !self.input_paths.is_empty();
+        let has_input_paths = !value.input_paths.is_empty();
         if has_input_paths && download_data {
             anyhow::bail!("Provide either --input-paths or --download-data, but not both.");
         }
@@ -383,8 +382,8 @@ impl TryInto<ParsedArgs> for RawArgs {
             anyhow::bail!("Either --input-paths or --download-data must be provided.");
         }
         let download_teryt_flag = {
-            let mut flag = self.teryt_download.unwrap_or(false);
-            if self.schema_version.to_lowercase() == "2012" && flag {
+            let mut flag = value.teryt_download.unwrap_or(false);
+            if value.schema_version.to_lowercase() == "2012" && flag {
                 println!(
                     "Warning: teryt-download was set to true but schema was set to 2012 which is not compatible. teryt-download will be treated as false."
                 );
@@ -392,18 +391,18 @@ impl TryInto<ParsedArgs> for RawArgs {
             }
             flag
         };
-        if self.schema_version.to_lowercase() == "2021"
-            && self.teryt_path.is_none()
+        if value.schema_version.to_lowercase() == "2021"
+            && value.teryt_path.is_none()
             && !download_teryt_flag
         {
             anyhow::bail!(
                 "Chosen schema 2021 but provided neither teryt file path nor teryt-download flag. PRG schema 2021 does not contain names of administrative units so they need to be read from external source."
             )
         }
-        let teryt_api_username = self
+        let teryt_api_username = value
             .teryt_api_username
             .unwrap_or(std::env::var("TERYT_API_USERNAME").unwrap_or_default());
-        let teryt_api_password = self
+        let teryt_api_password = value
             .teryt_api_password
             .unwrap_or(std::env::var("TERYT_API_PASSWORD").unwrap_or_default());
         if download_teryt_flag && (teryt_api_username.is_empty() || teryt_api_password.is_empty()) {
@@ -411,32 +410,32 @@ impl TryInto<ParsedArgs> for RawArgs {
                 "When teryt-download flag is used then either the env variables need to be set or credentials needs to be provided via parameters."
             )
         }
-        let schema_version = match self.schema_version.to_lowercase().as_str() {
+        let schema_version = match value.schema_version.to_lowercase().as_str() {
             "2012" => SchemaVersion::Model2012,
             "2021" => SchemaVersion::Model2021,
             _ => {
                 anyhow::bail!(
                     "unsupported schema version `{}`, expected one of: 2012, 2021",
-                    &self.schema_version
+                    &value.schema_version
                 );
             }
         };
-        let output_format = match self.output_format.to_lowercase().as_str() {
+        let output_format = match value.output_format.to_lowercase().as_str() {
             "csv" => OutputFormat::CSV,
             "geoparquet" => OutputFormat::GeoParquet,
             _ => {
                 anyhow::bail!(
                     "unsupported format `{}`, expected one of: csv, geoparquet",
-                    &self.output_format
+                    &value.output_format
                 );
             }
         };
-        let compression_level = match &self.parquet_compression.as_deref() {
-            None | Some("zstd") => Some(self.compression_level.unwrap_or(11)),
-            Some("brotli") => Some(self.compression_level.unwrap_or(6)),
+        let compression_level = match &value.parquet_compression.as_deref() {
+            None | Some("zstd") => Some(value.compression_level.unwrap_or(11)),
+            Some("brotli") => Some(value.compression_level.unwrap_or(6)),
             _ => None,
         };
-        let parquet_compression = match &self.parquet_compression.as_deref() {
+        let parquet_compression = match &value.parquet_compression.as_deref() {
             None | Some("zstd") => {
                 Compression::ZSTD(ZstdLevel::try_new(compression_level.unwrap())?)
             }
@@ -447,28 +446,28 @@ impl TryInto<ParsedArgs> for RawArgs {
             _ => {
                 anyhow::bail!(
                     "Unexpected compression type for parquet writer: `{:?}`",
-                    &self.parquet_compression
+                    &value.parquet_compression
                 )
             }
         };
-        let parquet_row_group_size = self.parquet_row_group_size.unwrap_or(batch_size);
-        let parquet_version = match &self.parquet_version.as_deref() {
+        let parquet_row_group_size = value.parquet_row_group_size.unwrap_or(batch_size);
+        let parquet_version = match &value.parquet_version.as_deref() {
             None | Some("v2") => WriterVersion::PARQUET_2_0,
             Some("v1") => WriterVersion::PARQUET_1_0,
             _ => {
                 anyhow::bail!(
                     "Unexpected version for parquet writer: `{:?}`",
-                    &self.parquet_version
+                    &value.parquet_version
                 )
             }
         };
-        let crs = match &self.crs_epsg {
+        let crs = match &value.crs_epsg {
             None | Some(2180) => CRS::Epsg2180,
             Some(4326) => CRS::Epsg4326,
             _ => {
                 anyhow::bail!(
                     "Unrecognized EPSG code: `{:?}`. Needs to be one of: 2180, 4326.",
-                    &self.crs_epsg,
+                    &value.crs_epsg,
                 )
             }
         };
@@ -486,14 +485,14 @@ impl TryInto<ParsedArgs> for RawArgs {
         let parsed_paths = if download_data {
             vec![]
         } else {
-            parse_input_paths(&self.input_paths, &schema_version)?
+            parse_input_paths(&value.input_paths, &schema_version)?
         };
         Ok(ParsedArgs {
-            input_paths: self.input_paths,
+            input_paths: value.input_paths,
             parsed_paths: parsed_paths,
             download_data,
             download_data_path,
-            output_path: self.output_path,
+            output_path: value.output_path,
             download_teryt: download_teryt_flag,
             teryt_api_username: if teryt_api_username.is_empty() {
                 None
@@ -505,7 +504,7 @@ impl TryInto<ParsedArgs> for RawArgs {
             } else {
                 Some(teryt_api_password)
             },
-            teryt_path: self.teryt_path,
+            teryt_path: value.teryt_path,
             batch_size: batch_size,
             schema_version: schema_version,
             output_format: output_format,
