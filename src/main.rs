@@ -8,7 +8,7 @@ use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperti
 
 mod cli;
 use prg_convert::{
-    FileType, OutputFormat, SchemaVersion, Writer, get_address_parser_2012_uncompressed,
+    FileType, OutputFormat, SchemaVersion, get_address_parser_2012_uncompressed,
     get_address_parser_2012_zip, get_address_parser_2021_uncompressed, get_address_parser_2021_zip,
     get_teryt_mapping, terc::Terc,
 };
@@ -16,33 +16,48 @@ use zip::ZipArchive;
 
 use crate::cli::CompressedFile;
 
-fn write_batch(
-    output_format: &OutputFormat,
-    writer: &mut Writer,
-    geoparquet_encoder: &mut Option<GeoParquetRecordBatchEncoder>,
-    batch: RecordBatch,
-) {
-    match output_format {
-        OutputFormat::CSV => {
-            writer
-                .csv
-                .as_mut()
-                .unwrap()
-                .write(&batch)
-                .expect("Failed to write batch.");
+enum OutputWriter {
+    Csv(arrow::csv::writer::Writer<std::fs::File>),
+    GeoParquet {
+        writer: ArrowWriter<std::fs::File>,
+        encoder: GeoParquetRecordBatchEncoder,
+    },
+}
+
+impl OutputWriter {
+    fn write_batch(&mut self, batch: &RecordBatch) -> anyhow::Result<()> {
+        match self {
+            OutputWriter::Csv(w) => {
+                w.write(batch).context("Failed to write CSV batch.")?;
+            }
+            OutputWriter::GeoParquet { writer, encoder } => {
+                let encoded = encoder
+                    .encode_record_batch(batch)
+                    .context("Failed to encode GeoParquet batch.")?;
+                writer
+                    .write(&encoded)
+                    .context("Failed to write GeoParquet batch.")?;
+            }
         }
-        OutputFormat::GeoParquet => {
-            let encoded_batch = geoparquet_encoder
-                .as_mut()
-                .unwrap()
-                .encode_record_batch(&batch)
-                .expect("Failed to encode batch.");
-            writer
-                .geoparquet
-                .as_mut()
-                .unwrap()
-                .write(&encoded_batch)
-                .expect("Failed to write batch.");
+        Ok(())
+    }
+
+    fn finish(self) -> anyhow::Result<()> {
+        match self {
+            OutputWriter::Csv(_) => Ok(()),
+            OutputWriter::GeoParquet {
+                mut writer,
+                encoder,
+            } => {
+                let kv_metadata = encoder
+                    .into_keyvalue()
+                    .context("Could not create GeoParquet K/V metadata.")?;
+                writer.append_key_value_metadata(kv_metadata);
+                writer
+                    .finish()
+                    .context("Failed to write GeoParquet metadata.")?;
+                Ok(())
+            }
         }
     }
 }
@@ -51,32 +66,25 @@ fn parse_file(
     file_type: &FileType,
     parsed_args: &cli::ParsedArgs,
     file_path: &PathBuf,
-    mut writer: &mut Writer,
-    mut geoparquet_encoder: &mut Option<GeoParquetRecordBatchEncoder>,
+    output_writer: &mut OutputWriter,
     zip_file_index: &Option<usize>,
     teryt_mapping: &Option<HashMap<String, Terc>>,
 ) -> anyhow::Result<usize> {
     let mut processed_rows = 0;
     match (&file_type, &parsed_args.schema_version) {
         (FileType::XML, SchemaVersion::Model2012) => {
-            get_address_parser_2012_uncompressed(
+            for batch in get_address_parser_2012_uncompressed(
                 &file_path,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
                 &parsed_args.crs,
                 parsed_args.arrow_schema.clone(),
                 &parsed_args.geoarrow_geom_type,
-            )?
-            .for_each(|batch| {
+            )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
-                write_batch(
-                    &parsed_args.output_format,
-                    &mut writer,
-                    &mut geoparquet_encoder,
-                    batch,
-                );
-            });
+                output_writer.write_batch(&batch)?;
+            }
         }
         (FileType::ZIP, SchemaVersion::Model2012) => {
             let f = std::fs::File::open(&file_path)
@@ -84,7 +92,7 @@ fn parse_file(
             let mut archive = ZipArchive::new(f).with_context(|| {
                 format!("Failed to decompress ZIP file: `{}`.", &file_path.display())
             })?;
-            get_address_parser_2012_zip(
+            for batch in get_address_parser_2012_zip(
                 &mut archive,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
@@ -92,20 +100,14 @@ fn parse_file(
                 &parsed_args.crs,
                 parsed_args.arrow_schema.clone(),
                 &parsed_args.geoarrow_geom_type,
-            )?
-            .for_each(|batch| {
+            )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
-                write_batch(
-                    &parsed_args.output_format,
-                    &mut writer,
-                    &mut geoparquet_encoder,
-                    batch,
-                );
-            });
+                output_writer.write_batch(&batch)?;
+            }
         }
         (FileType::XML, SchemaVersion::Model2021) => {
-            get_address_parser_2021_uncompressed(
+            for batch in get_address_parser_2021_uncompressed(
                 &file_path,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
@@ -113,17 +115,11 @@ fn parse_file(
                 &parsed_args.crs,
                 parsed_args.arrow_schema.clone(),
                 &parsed_args.geoarrow_geom_type,
-            )?
-            .for_each(|batch| {
+            )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
-                write_batch(
-                    &parsed_args.output_format,
-                    &mut writer,
-                    &mut geoparquet_encoder,
-                    batch,
-                );
-            });
+                output_writer.write_batch(&batch)?;
+            }
         }
         (FileType::ZIP, SchemaVersion::Model2021) => {
             let f = std::fs::File::open(&file_path)
@@ -131,7 +127,7 @@ fn parse_file(
             let mut archive = ZipArchive::new(f).with_context(|| {
                 format!("Failed to decompress ZIP file: `{}`.", &file_path.display())
             })?;
-            get_address_parser_2021_zip(
+            for batch in get_address_parser_2021_zip(
                 &mut archive,
                 &parsed_args.batch_size,
                 &parsed_args.output_format,
@@ -140,17 +136,11 @@ fn parse_file(
                 &parsed_args.crs,
                 parsed_args.arrow_schema.clone(),
                 &parsed_args.geoarrow_geom_type,
-            )?
-            .for_each(|batch| {
+            )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
-                write_batch(
-                    &parsed_args.output_format,
-                    &mut writer,
-                    &mut geoparquet_encoder,
-                    batch,
-                );
-            });
+                output_writer.write_batch(&batch)?;
+            }
         }
     }
     Ok(processed_rows)
@@ -192,35 +182,24 @@ fn main() -> Result<()> {
             &parsed_args.output_path.to_string_lossy()
         )
     })?;
-    let (mut writer, mut geoparquet_encoder) = match &parsed_args.output_format {
-        OutputFormat::CSV => (
-            Writer {
-                csv: Some(WriterBuilder::new().with_header(true).build(output_file)),
-                geoparquet: None,
-            },
-            None,
-        ),
+    let mut output_writer = match &parsed_args.output_format {
+        OutputFormat::CSV => {
+            OutputWriter::Csv(WriterBuilder::new().with_header(true).build(output_file))
+        }
         OutputFormat::GeoParquet => {
             let props = WriterProperties::builder()
                 .set_max_row_group_row_count(Some(parsed_args.parquet_row_group_size))
                 .set_writer_version(parsed_args.parquet_version)
                 .set_compression(parsed_args.parquet_compression)
                 .build();
-            let gpq_encoder = GeoParquetRecordBatchEncoder::try_new(
+            let encoder = GeoParquetRecordBatchEncoder::try_new(
                 &parsed_args.arrow_schema,
                 &GeoParquetWriterOptions::default(),
             )
             .expect("Could not create GeoParquet encoder.");
-            (
-                Writer {
-                    csv: None,
-                    geoparquet: Some(
-                        ArrowWriter::try_new(output_file, gpq_encoder.target_schema(), Some(props))
-                            .expect("Could not create GeoParquet writer."),
-                    ),
-                },
-                Some(gpq_encoder),
-            )
+            let writer = ArrowWriter::try_new(output_file, encoder.target_schema(), Some(props))
+                .expect("Could not create GeoParquet writer.");
+            OutputWriter::GeoParquet { writer, encoder }
         }
     };
 
@@ -252,8 +231,7 @@ fn main() -> Result<()> {
                     &file.file_type,
                     &parsed_args,
                     &file.path,
-                    &mut writer,
-                    &mut geoparquet_encoder,
+                    &mut output_writer,
                     &None,
                     &teryt_mapping,
                 )?;
@@ -273,8 +251,7 @@ fn main() -> Result<()> {
                         &file.file_type,
                         &parsed_args,
                         &file.path,
-                        &mut writer,
-                        &mut geoparquet_encoder,
+                        &mut output_writer,
                         &Some(compressed_file.index),
                         &teryt_mapping,
                     )?;
@@ -285,17 +262,7 @@ fn main() -> Result<()> {
 
         file_counter += 1;
     }
-    if matches!(parsed_args.output_format, OutputFormat::GeoParquet) {
-        let kv_metadata = geoparquet_encoder
-            .unwrap()
-            .into_keyvalue()
-            .expect("Could not create GeoParquet K/V metadata.");
-        let parquet_writer = writer.geoparquet.as_mut().unwrap();
-        parquet_writer.append_key_value_metadata(kv_metadata);
-        parquet_writer
-            .finish()
-            .expect("Failed to write geoparquet metadata.");
-    }
+    output_writer.finish()?;
     let duration = start_time.elapsed();
     println!("----------------------------------------");
     println!(
