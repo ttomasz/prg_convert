@@ -116,18 +116,15 @@ fn parse_terc_zip_file(teryt_file: std::fs::File) -> anyhow::Result<Teryt> {
     Ok(teryt)
 }
 
-/// Get TERC mapping from official SOAP API. Uses today's date to get newest possible file.
-///
-/// Warning: current implementation pastes username and password as they are into XML SOAP Envelope.
-/// If e.g. password contains symbols disallowed by XML you need to escape them separately before providing them to this function.
-pub fn download_terc_mapping(
+fn build_terc_soap_payload(
+    message_uuid: &uuid::Uuid,
+    url: &str,
     api_username: &str,
     api_password: &str,
-) -> anyhow::Result<HashMap<String, Terc>> {
-    let url = "https://uslugaterytws1.stat.gov.pl/TerytWs1.svc";
-    let uuid = Uuid::new_v4();
-    let todays_date = Local::now().format("%Y-%m-%d").to_string();
-    let payload = format!(
+    todays_date: &str,
+) -> String {
+    use quick_xml::escape::escape;
+    format!(
         r#"
 <soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
   <soap-env:Header xmlns:wsa="http://www.w3.org/2005/08/addressing">
@@ -148,8 +145,39 @@ pub fn download_terc_mapping(
   </soap-env:Body>
 </soap-env:Envelope>
     "#,
-        uuid, url, api_username, api_password, todays_date
+        message_uuid,
+        url,
+        escape(api_username),
+        escape(api_password),
+        todays_date
+    )
+}
+
+#[test]
+fn test_build_terc_soap_payload_escapes_credentials() {
+    let uuid = uuid::Uuid::nil();
+    let payload = build_terc_soap_payload(
+        &uuid,
+        "https://example.test",
+        "user&<>\"'",
+        "p@ss<word>",
+        "2026-01-01",
     );
+    // raw special characters must not appear inside the credential elements
+    assert!(payload.contains("<wsse:Username>user&amp;&lt;&gt;"));
+    assert!(payload.contains("p@ss&lt;word&gt;</wsse:Password>"));
+    assert!(!payload.contains("user&<>"));
+}
+
+/// Get TERC mapping from official SOAP API. Uses today's date to get newest possible file.
+pub fn download_terc_mapping(
+    api_username: &str,
+    api_password: &str,
+) -> anyhow::Result<HashMap<String, Terc>> {
+    let url = "https://uslugaterytws1.stat.gov.pl/TerytWs1.svc";
+    let uuid = Uuid::new_v4();
+    let todays_date = Local::now().format("%Y-%m-%d").to_string();
+    let payload = build_terc_soap_payload(&uuid, url, api_username, api_password, &todays_date);
     let client = reqwest::blocking::Client::new();
     println!("Sending request to TERYT API...");
     let res = client
