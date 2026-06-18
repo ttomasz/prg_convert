@@ -195,7 +195,7 @@ pub fn download_terc_mapping(
         .with_context(|| "Could not write downloaded TERC file to temp storage.")?;
     file.seek(std::io::SeekFrom::Start(0))?;
     let teryt = parse_terc_zip_file(file)?;
-    let mapping = prepare_mapping_from_teryt(teryt);
+    let mapping = prepare_mapping_from_teryt(teryt)?;
     if mapping.is_empty() {
         anyhow::bail!("After parsing TERYT file mapping dict is empty.")
     } else {
@@ -241,7 +241,7 @@ pub fn get_terc_mapping(file_path: &PathBuf) -> anyhow::Result<HashMap<String, T
         }
     }
     .with_context(|| "Could not deserialize teryt dictionary from XML file.")?;
-    let mapping = prepare_mapping_from_teryt(teryt);
+    let mapping = prepare_mapping_from_teryt(teryt)?;
     if mapping.is_empty() {
         anyhow::bail!("After parsing TERYT file mapping dict is empty.")
     } else {
@@ -249,43 +249,68 @@ pub fn get_terc_mapping(file_path: &PathBuf) -> anyhow::Result<HashMap<String, T
     }
 }
 
-fn prepare_mapping_from_teryt(teryt: Teryt) -> HashMap<String, Terc> {
+fn prepare_mapping_from_teryt(teryt: Teryt) -> anyhow::Result<HashMap<String, Terc>> {
     let mut woj = HashMap::new();
     let mut pow = HashMap::new();
-    let mut mapping = HashMap::new();
-    for row in teryt.catalog.row {
+    // First pass: collect voivodeship (2-digit) and county (4-digit) names.
+    for row in &teryt.catalog.row {
         let teryt_id = [
             row.woj.clone(),
-            row.pow.unwrap_or_default(),
-            row.gmi.unwrap_or_default(),
-            row.rodz.unwrap_or_default(),
+            row.pow.clone().unwrap_or_default(),
+            row.gmi.clone().unwrap_or_default(),
+            row.rodz.clone().unwrap_or_default(),
         ]
         .join("");
         match teryt_id.len() {
             2 => {
-                woj.insert(teryt_id, row.nazwa.to_lowercase()); // teryt dictionary has them all uppercase, while previous prg schema had them all lowercase
+                // teryt dictionary stores these uppercase; previous PRG schema used lowercase
+                woj.insert(teryt_id, row.nazwa.to_lowercase());
             }
             4 => {
-                pow.insert(teryt_id, row.nazwa);
+                pow.insert(teryt_id, row.nazwa.clone());
             }
-            7 => {
-                mapping.insert(
-                    teryt_id.clone(),
-                    Terc {
-                        voivodeship_teryt_id: row.woj.clone(),
-                        voivodeship_name: woj[&row.woj].to_string(),
-                        county_teryt_id: teryt_id[..4].to_string(),
-                        county_name: pow[&teryt_id[..4]].to_string(),
-                        municipality_name: row.nazwa.to_string(),
-                    },
-                );
-            }
-            _ => {
-                panic!("Unrecognized teryt code type: {}.", teryt_id)
-            }
+            7 => {} // handled in the second pass
+            other => anyhow::bail!(
+                "Unrecognized teryt code length {} for code `{}`.",
+                other,
+                teryt_id
+            ),
         }
     }
-    mapping
+    // Second pass: build municipality entries, now that woj/pow are fully populated.
+    let mut mapping = HashMap::new();
+    for row in &teryt.catalog.row {
+        let teryt_id = [
+            row.woj.clone(),
+            row.pow.clone().unwrap_or_default(),
+            row.gmi.clone().unwrap_or_default(),
+            row.rodz.clone().unwrap_or_default(),
+        ]
+        .join("");
+        if teryt_id.len() != 7 {
+            continue;
+        }
+        let voivodeship_name = woj
+            .get(&row.woj)
+            .with_context(|| format!("No voivodeship name found for code `{}`.", row.woj))?
+            .clone();
+        let county_id = teryt_id[..4].to_string();
+        let county_name = pow
+            .get(&county_id)
+            .with_context(|| format!("No county name found for code `{}`.", county_id))?
+            .clone();
+        mapping.insert(
+            teryt_id.clone(),
+            Terc {
+                voivodeship_teryt_id: row.woj.clone(),
+                voivodeship_name,
+                county_teryt_id: county_id,
+                county_name,
+                municipality_name: row.nazwa.clone(),
+            },
+        );
+    }
+    Ok(mapping)
 }
 
 #[test]
@@ -320,7 +345,7 @@ fn test_parse_api_response() {
     file.write_all(&bytes).unwrap();
     file.seek(std::io::SeekFrom::Start(0)).unwrap();
     let teryt = parse_terc_zip_file(file).unwrap();
-    let teryt_mapping = prepare_mapping_from_teryt(teryt);
+    let teryt_mapping = prepare_mapping_from_teryt(teryt).unwrap();
     let k0201011 = &teryt_mapping["0201011"];
     assert_eq!(k0201011.municipality_name, "Bolesławiec");
     assert_eq!(k0201011.county_teryt_id, "0201");
@@ -349,4 +374,45 @@ fn test_get_terc_mapping_unsupported_extension() {
         "error message was: {}",
         err
     );
+}
+
+#[test]
+fn test_prepare_mapping_handles_out_of_order_rows() {
+    fn row(
+        woj: &str,
+        pow: Option<&str>,
+        gmi: Option<&str>,
+        rodz: Option<&str>,
+        nazwa: &str,
+    ) -> Row {
+        Row {
+            woj: woj.to_string(),
+            pow: pow.map(str::to_string),
+            gmi: gmi.map(str::to_string),
+            rodz: rodz.map(str::to_string),
+            nazwa: nazwa.to_string(),
+            nazwa_dod: String::new(),
+            stan_na: "2026-01-01".to_string(),
+        }
+    }
+    let teryt = Teryt {
+        catalog: Catalog {
+            name: "TERC".to_string(),
+            catalog_type: "TERC".to_string(),
+            date: "2026-01-01".to_string(),
+            row: vec![
+                // municipality first (7 digits worth of components), then county, then voivodeship
+                row("02", Some("01"), Some("01"), Some("1"), "Bolesławiec"),
+                row("02", Some("01"), None, None, "bolesławiecki"),
+                row("02", None, None, None, "DOLNOŚLĄSKIE"),
+            ],
+        },
+    };
+    let mapping = prepare_mapping_from_teryt(teryt).expect("should not panic on out-of-order rows");
+    let m = &mapping["0201011"];
+    assert_eq!(m.municipality_name, "Bolesławiec");
+    assert_eq!(m.county_teryt_id, "0201");
+    assert_eq!(m.county_name, "bolesławiecki");
+    assert_eq!(m.voivodeship_teryt_id, "02");
+    assert_eq!(m.voivodeship_name, "dolnośląskie"); // lowercased
 }
