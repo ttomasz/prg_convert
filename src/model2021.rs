@@ -580,18 +580,14 @@ impl<R: BufRead> AddressParser2021<R> {
                             if text_trimmed.is_empty() {
                                 self.lifecycle_start_date.append_null();
                             } else {
-                                let dt = NaiveDateTime::parse_from_str(
-                                    &text_trimmed,
+                                let naive = NaiveDateTime::parse_from_str(
+                                    text_trimmed,
                                     "%Y-%m-%dT%H:%M:%S",
                                 )
-                                .expect("Failed to parse datetime")
-                                .and_local_timezone(
-                                    chrono::FixedOffset::east_opt(2 * 60 * 60).unwrap(),
-                                ) // assume +02:00 tz
-                                .unwrap()
-                                .to_utc();
-                                self.lifecycle_start_date
-                                    .append_value(dt.timestamp() * 1000);
+                                .expect("Failed to parse datetime");
+                                let millis = crate::common::warsaw_naive_to_utc_millis(naive)
+                                    .expect("Failed to convert Warsaw local time to UTC");
+                                self.lifecycle_start_date.append_value(millis);
                             }
                         }
                         b"prgad:dataNadania" => {
