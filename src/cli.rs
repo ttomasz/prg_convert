@@ -28,6 +28,35 @@ use prg_convert::SchemaVersion;
 
 pub const DEFAULT_BATCH_SIZE: usize = 100_000;
 
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum OutputFormatArg {
+    Csv,
+    Geoparquet,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum SchemaVersionArg {
+    #[value(name = "2012")]
+    V2012,
+    #[value(name = "2021")]
+    V2021,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum ParquetCompressionArg {
+    Zstd,
+    Snappy,
+    Brotli,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum ParquetVersionArg {
+    #[value(name = "v1")]
+    V1,
+    #[value(name = "v2")]
+    V2,
+}
+
 #[derive(clap::Parser)]
 pub struct RawArgs {
     #[arg(
@@ -43,11 +72,12 @@ pub struct RawArgs {
     output_path: std::path::PathBuf,
     #[arg(
         long = "output-format",
-        help = "Output file format (one of: csv, geoparquet)."
+        ignore_case = true,
+        help = "Output file format."
     )]
-    output_format: String,
-    #[arg(long = "schema-version", help = "Schema version (one of: 2012, 2021).")]
-    schema_version: String,
+    output_format: OutputFormatArg,
+    #[arg(long = "schema-version", help = "Schema version.")]
+    schema_version: SchemaVersionArg,
     #[arg(
         long = "teryt-path",
         help = "Path of XML file with TERYT dictionary unpacked from archive downloaded from: https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default (TERC, podstawowa). Required for --schema-version 2021."
@@ -72,9 +102,10 @@ pub struct RawArgs {
     batch_size: Option<usize>,
     #[arg(
         long = "parquet-compression",
-        help = "(Optional) What type of compression to use when writing parquet file (one of: zstd, snappy,) (default: zstd)."
+        ignore_case = true,
+        help = "(Optional) Compression to use when writing parquet file (default: zstd)."
     )]
-    parquet_compression: Option<String>,
+    parquet_compression: Option<ParquetCompressionArg>,
     #[arg(
         long = "compression-level",
         help = "(Optional) What level of compression to use when writing parquet file (if compression algorithm supports it)."
@@ -87,9 +118,10 @@ pub struct RawArgs {
     parquet_row_group_size: Option<usize>,
     #[arg(
         long = "parquet-version",
-        help = "(Optional) Version of parquet standard to use (one of: v1, v2,) (default: v2)."
+        ignore_case = true,
+        help = "(Optional) Version of parquet standard to use (default: v2)."
     )]
-    parquet_version: Option<String>,
+    parquet_version: Option<ParquetVersionArg>,
     #[arg(
         long = "crs-epsg",
         help = "(Optional) EPSG code of Coordinate Reference System for geometry data written to geoparquet. One of: 2180, 4326. Default: 2180. Does not affect CSV format which includes coordinates in both."
@@ -383,7 +415,7 @@ impl TryFrom<RawArgs> for ParsedArgs {
         }
         let download_teryt_flag = {
             let mut flag = value.teryt_download.unwrap_or(false);
-            if value.schema_version.to_lowercase() == "2012" && flag {
+            if matches!(value.schema_version, SchemaVersionArg::V2012) && flag {
                 println!(
                     "Warning: teryt-download was set to true but schema was set to 2012 which is not compatible. teryt-download will be treated as false."
                 );
@@ -391,7 +423,7 @@ impl TryFrom<RawArgs> for ParsedArgs {
             }
             flag
         };
-        if value.schema_version.to_lowercase() == "2021"
+        if matches!(value.schema_version, SchemaVersionArg::V2021)
             && value.teryt_path.is_none()
             && !download_teryt_flag
         {
@@ -410,56 +442,32 @@ impl TryFrom<RawArgs> for ParsedArgs {
                 "When teryt-download flag is used then either the env variables need to be set or credentials needs to be provided via parameters."
             )
         }
-        let schema_version = match value.schema_version.to_lowercase().as_str() {
-            "2012" => SchemaVersion::Model2012,
-            "2021" => SchemaVersion::Model2021,
-            _ => {
-                anyhow::bail!(
-                    "unsupported schema version `{}`, expected one of: 2012, 2021",
-                    &value.schema_version
-                );
-            }
+        let schema_version = match value.schema_version {
+            SchemaVersionArg::V2012 => SchemaVersion::Model2012,
+            SchemaVersionArg::V2021 => SchemaVersion::Model2021,
         };
-        let output_format = match value.output_format.to_lowercase().as_str() {
-            "csv" => OutputFormat::CSV,
-            "geoparquet" => OutputFormat::GeoParquet,
-            _ => {
-                anyhow::bail!(
-                    "unsupported format `{}`, expected one of: csv, geoparquet",
-                    &value.output_format
-                );
-            }
+        let output_format = match value.output_format {
+            OutputFormatArg::Csv => OutputFormat::CSV,
+            OutputFormatArg::Geoparquet => OutputFormat::GeoParquet,
         };
-        let compression_level = match &value.parquet_compression.as_deref() {
-            None | Some("zstd") => Some(value.compression_level.unwrap_or(11)),
-            Some("brotli") => Some(value.compression_level.unwrap_or(6)),
-            _ => None,
+        let compression_level = match value.parquet_compression {
+            None | Some(ParquetCompressionArg::Zstd) => Some(value.compression_level.unwrap_or(11)),
+            Some(ParquetCompressionArg::Brotli) => Some(value.compression_level.unwrap_or(6)),
+            Some(ParquetCompressionArg::Snappy) => None,
         };
-        let parquet_compression = match &value.parquet_compression.as_deref() {
-            None | Some("zstd") => {
+        let parquet_compression = match value.parquet_compression {
+            None | Some(ParquetCompressionArg::Zstd) => {
                 Compression::ZSTD(ZstdLevel::try_new(compression_level.unwrap())?)
             }
-            Some("snappy") => Compression::SNAPPY,
-            Some("brotli") => Compression::BROTLI(BrotliLevel::try_new(
+            Some(ParquetCompressionArg::Snappy) => Compression::SNAPPY,
+            Some(ParquetCompressionArg::Brotli) => Compression::BROTLI(BrotliLevel::try_new(
                 compression_level.unwrap().cast_unsigned(),
             )?),
-            _ => {
-                anyhow::bail!(
-                    "Unexpected compression type for parquet writer: `{:?}`",
-                    &value.parquet_compression
-                )
-            }
         };
         let parquet_row_group_size = value.parquet_row_group_size.unwrap_or(batch_size);
-        let parquet_version = match &value.parquet_version.as_deref() {
-            None | Some("v2") => WriterVersion::PARQUET_2_0,
-            Some("v1") => WriterVersion::PARQUET_1_0,
-            _ => {
-                anyhow::bail!(
-                    "Unexpected version for parquet writer: `{:?}`",
-                    &value.parquet_version
-                )
-            }
+        let parquet_version = match value.parquet_version {
+            None | Some(ParquetVersionArg::V2) => WriterVersion::PARQUET_2_0,
+            Some(ParquetVersionArg::V1) => WriterVersion::PARQUET_1_0,
         };
         let crs = match &value.crs_epsg {
             None | Some(2180) => CRS::Epsg2180,
@@ -522,15 +530,15 @@ impl TryFrom<RawArgs> for ParsedArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryInto;
+    use clap::Parser;
 
     fn make_base_raw_args() -> RawArgs {
         RawArgs {
             input_paths: vec!["fixtures/sample_model2012.xml".to_string()],
             download_data: None,
             output_path: PathBuf::from("/tmp/test_output.csv"),
-            output_format: "csv".to_string(),
-            schema_version: "2012".to_string(),
+            output_format: OutputFormatArg::Csv,
+            schema_version: SchemaVersionArg::V2012,
             teryt_path: None,
             teryt_download: None,
             teryt_api_username: None,
@@ -621,33 +629,9 @@ mod tests {
     }
 
     #[test]
-    fn test_try_into_invalid_schema_version() {
-        let args = RawArgs {
-            schema_version: "9999".to_string(),
-            ..make_base_raw_args()
-        };
-        let result: anyhow::Result<ParsedArgs> = args.try_into();
-        assert!(result.is_err());
-        let err_str = format!("{}", result.err().unwrap());
-        assert!(err_str.contains("unsupported schema version"));
-    }
-
-    #[test]
-    fn test_try_into_invalid_output_format() {
-        let args = RawArgs {
-            output_format: "excel".to_string(),
-            ..make_base_raw_args()
-        };
-        let result: anyhow::Result<ParsedArgs> = args.try_into();
-        assert!(result.is_err());
-        let err_str = format!("{}", result.err().unwrap());
-        assert!(err_str.contains("unsupported format"));
-    }
-
-    #[test]
     fn test_try_into_schema_2021_missing_teryt() {
         let args = RawArgs {
-            schema_version: "2021".to_string(),
+            schema_version: SchemaVersionArg::V2021,
             teryt_path: None,
             teryt_download: Some(false),
             ..make_base_raw_args()
@@ -699,7 +683,7 @@ mod tests {
             std::env::remove_var("TERYT_API_PASSWORD");
         }
         let args = RawArgs {
-            schema_version: "2021".to_string(),
+            schema_version: SchemaVersionArg::V2021,
             teryt_path: None,
             teryt_download: Some(true),
             ..make_base_raw_args()
@@ -779,7 +763,7 @@ mod tests {
     #[test]
     fn test_try_into_valid_model2021_with_teryt_path() {
         let args = RawArgs {
-            schema_version: "2021".to_string(),
+            schema_version: SchemaVersionArg::V2021,
             teryt_path: Some(PathBuf::from("fixtures/TERC_Urzedowy_2025-11-18.xml")),
             ..make_base_raw_args()
         };
@@ -794,38 +778,6 @@ mod tests {
     }
 
     // --- invalid parquet/crs options ---
-
-    #[test]
-    fn test_try_into_invalid_parquet_compression() {
-        let args = RawArgs {
-            parquet_compression: Some("lz4".to_string()),
-            ..make_base_raw_args()
-        };
-        let result: anyhow::Result<ParsedArgs> = args.try_into();
-        assert!(result.is_err());
-        let err_str = format!("{}", result.err().unwrap());
-        assert!(
-            err_str.contains("compression") || err_str.contains("Unexpected"),
-            "Error message was: {}",
-            err_str
-        );
-    }
-
-    #[test]
-    fn test_try_into_invalid_parquet_version() {
-        let args = RawArgs {
-            parquet_version: Some("v3".to_string()),
-            ..make_base_raw_args()
-        };
-        let result: anyhow::Result<ParsedArgs> = args.try_into();
-        assert!(result.is_err());
-        let err_str = format!("{}", result.err().unwrap());
-        assert!(
-            err_str.contains("version") || err_str.contains("Unexpected"),
-            "Error message was: {}",
-            err_str
-        );
-    }
 
     #[test]
     fn test_try_into_invalid_crs_epsg() {
@@ -848,7 +800,7 @@ mod tests {
     #[test]
     fn test_try_into_download_teryt_with_schema_2012_is_downgraded() {
         let args = RawArgs {
-            schema_version: "2012".to_string(),
+            schema_version: SchemaVersionArg::V2012,
             teryt_download: Some(true),
             ..make_base_raw_args()
         };
@@ -887,5 +839,80 @@ mod tests {
             "Error message was: {}",
             err_str
         );
+    }
+
+    #[test]
+    fn test_parse_rejects_invalid_output_format() {
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.csv",
+            "--schema-version",
+            "2012",
+            "--output-format",
+            "excel",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_rejects_invalid_schema_version() {
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.csv",
+            "--schema-version",
+            "9999",
+            "--output-format",
+            "csv",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_rejects_invalid_parquet_compression() {
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.parquet",
+            "--schema-version",
+            "2012",
+            "--output-format",
+            "geoparquet",
+            "--parquet-compression",
+            "lz4",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_rejects_invalid_parquet_version() {
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.parquet",
+            "--schema-version",
+            "2012",
+            "--output-format",
+            "geoparquet",
+            "--parquet-version",
+            "v3",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_accepts_uppercase_output_format() {
+        // ignore_case = true keeps the old case-insensitive behaviour
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.csv",
+            "--schema-version",
+            "2012",
+            "--output-format",
+            "CSV",
+        ]);
+        assert!(result.is_ok());
     }
 }
