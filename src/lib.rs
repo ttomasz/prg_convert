@@ -566,7 +566,7 @@ mod tests {
             .unwrap();
         assert_eq!(&wersja_id, &expected_wersja_id);
         let expected_poczatek_wersji_obiektu =
-            &TimestampMillisecondArray::from(vec![1760443546000, 1762434168000, 1492090215000])
+            &TimestampMillisecondArray::from(vec![1760443546000, 1762437768000, 1492090215000])
                 .with_timezone(Arc::from("UTC"));
         let poczatek_wersji_obiektu: &TimestampMillisecondArray = &arrow_batch
             .column_by_name("poczatek_wersji_obiektu")
