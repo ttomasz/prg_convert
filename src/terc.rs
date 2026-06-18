@@ -249,18 +249,24 @@ pub fn get_terc_mapping(file_path: &PathBuf) -> anyhow::Result<HashMap<String, T
     }
 }
 
+/// Concatenate a row's WOJ/POW/GMI/RODZ components into its TERYT code
+/// (2 chars for a voivodeship, 4 for a county, 7 for a municipality).
+fn teryt_code(row: &Row) -> String {
+    [
+        row.woj.clone(),
+        row.pow.clone().unwrap_or_default(),
+        row.gmi.clone().unwrap_or_default(),
+        row.rodz.clone().unwrap_or_default(),
+    ]
+    .join("")
+}
+
 fn prepare_mapping_from_teryt(teryt: Teryt) -> anyhow::Result<HashMap<String, Terc>> {
     let mut woj = HashMap::new();
     let mut pow = HashMap::new();
     // First pass: collect voivodeship (2-digit) and county (4-digit) names.
     for row in &teryt.catalog.row {
-        let teryt_id = [
-            row.woj.clone(),
-            row.pow.clone().unwrap_or_default(),
-            row.gmi.clone().unwrap_or_default(),
-            row.rodz.clone().unwrap_or_default(),
-        ]
-        .join("");
+        let teryt_id = teryt_code(row);
         match teryt_id.len() {
             2 => {
                 // teryt dictionary stores these uppercase; previous PRG schema used lowercase
@@ -280,13 +286,7 @@ fn prepare_mapping_from_teryt(teryt: Teryt) -> anyhow::Result<HashMap<String, Te
     // Second pass: build municipality entries, now that woj/pow are fully populated.
     let mut mapping = HashMap::new();
     for row in &teryt.catalog.row {
-        let teryt_id = [
-            row.woj.clone(),
-            row.pow.clone().unwrap_or_default(),
-            row.gmi.clone().unwrap_or_default(),
-            row.rodz.clone().unwrap_or_default(),
-        ]
-        .join("");
+        let teryt_id = teryt_code(row);
         if teryt_id.len() != 7 {
             continue;
         }
@@ -300,7 +300,7 @@ fn prepare_mapping_from_teryt(teryt: Teryt) -> anyhow::Result<HashMap<String, Te
             .with_context(|| format!("No county name found for code `{}`.", county_id))?
             .clone();
         mapping.insert(
-            teryt_id.clone(),
+            teryt_id,
             Terc {
                 voivodeship_teryt_id: row.woj.clone(),
                 voivodeship_name,
