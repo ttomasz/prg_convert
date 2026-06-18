@@ -202,8 +202,12 @@ pub fn get_terc_mapping(file_path: &PathBuf) -> anyhow::Result<HashMap<String, T
                 .with_context(|| "Could not deserialize TERC XML file.")
         }
         "zip" => parse_terc_zip_file(teryt_file),
-        _ => {
-            anyhow::bail!("")
+        other => {
+            anyhow::bail!(
+                "Unsupported TERYT file extension `{}` for `{}`. Expected `.xml` or `.zip`.",
+                other,
+                file_path.display()
+            )
         }
     }
     .with_context(|| "Could not deserialize teryt dictionary from XML file.")?;
@@ -331,4 +335,10 @@ fn test_get_terc_mapping_unsupported_extension() {
         .expect("Failed to create temp file");
     let result = get_terc_mapping(&temp_file.path().to_path_buf());
     assert!(result.is_err());
+    let err = format!("{}", result.err().unwrap());
+    assert!(
+        err.contains("extension") && err.contains("csv"),
+        "error message was: {}",
+        err
+    );
 }
