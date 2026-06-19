@@ -254,7 +254,7 @@ fn main() -> Result<()> {
             OutputWriter::GeoParquet {
                 writer,
                 encoder,
-                crs: parsed_args.crs.clone(),
+                crs: parsed_args.crs,
                 geom_type: parsed_args.geoarrow_geom_type.clone(),
                 geoparquet_schema: parsed_args.arrow_schema.clone(),
             }

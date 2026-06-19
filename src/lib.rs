@@ -19,13 +19,13 @@ use model2012::AddressParser2012;
 mod model2021;
 use model2021::AddressParser2021;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum CoordOrder {
     XY,
     YX,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum OutputFormat {
     CSV,
     GeoParquet,
@@ -40,7 +40,7 @@ impl std::fmt::Display for OutputFormat {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum FileType {
     XML,
     ZIP,
@@ -69,7 +69,7 @@ impl std::fmt::Display for SchemaVersion {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum CRS {
     Epsg2180,
     Epsg4326,
