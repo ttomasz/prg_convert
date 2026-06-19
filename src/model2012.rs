@@ -335,44 +335,35 @@ impl<R: BufRead> AddressParser2012<R> {
                         }
                         b"prg-ad:komponent" => {
                             let attr = get_attribute(e, b"xlink:href");
+                            // Look up by &str (no key allocation) and copy out only what we use.
                             let info = self
                                 .additional_info
-                                .get(&attr.to_string())
-                                .cloned()
-                                .unwrap_or_default();
-                            match info.typ {
-                                KomponentType::Country => {}
-                                KomponentType::Voivodeship => {
-                                    option_append_value_or_null(
+                                .get(attr.as_ref())
+                                .map(|i| (i.typ.clone(), i.teryt_id.clone()));
+                            if let Some((typ, teryt_id)) = info {
+                                match typ {
+                                    KomponentType::Voivodeship => option_append_value_or_null(
                                         &mut self.voivodeship_teryt_id,
-                                        info.teryt_id.clone(),
-                                    );
-                                }
-                                KomponentType::County => {
-                                    option_append_value_or_null(
+                                        teryt_id,
+                                    ),
+                                    KomponentType::County => option_append_value_or_null(
                                         &mut self.county_teryt_id,
-                                        info.teryt_id.clone(),
-                                    );
-                                }
-                                KomponentType::Municipality => {
-                                    option_append_value_or_null(
+                                        teryt_id,
+                                    ),
+                                    KomponentType::Municipality => option_append_value_or_null(
                                         &mut self.municipality_teryt_id,
-                                        info.teryt_id.clone(),
-                                    );
-                                }
-                                KomponentType::City => {
-                                    option_append_value_or_null(
+                                        teryt_id,
+                                    ),
+                                    KomponentType::City => option_append_value_or_null(
                                         &mut self.city_teryt_id,
-                                        info.teryt_id.clone(),
-                                    );
-                                }
-                                KomponentType::Street => {
-                                    option_append_value_or_null(
+                                        teryt_id,
+                                    ),
+                                    KomponentType::Street => option_append_value_or_null(
                                         &mut self.street_teryt_id,
-                                        info.teryt_id.clone(),
-                                    );
+                                        teryt_id,
+                                    ),
+                                    KomponentType::Country | KomponentType::Unknown => {}
                                 }
-                                KomponentType::Unknown => {}
                             }
                             nested_tag = false;
                             tag_ignore_text = true;
