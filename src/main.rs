@@ -138,7 +138,7 @@ fn parse_file(
     file_path: &PathBuf,
     output_writer: &mut OutputWriter,
     zip_file_index: &Option<usize>,
-    teryt_mapping: &Option<HashMap<String, Terc>>,
+    teryt_mapping: &Option<std::sync::Arc<HashMap<String, Terc>>>,
 ) -> anyhow::Result<usize> {
     let mut processed_rows = 0;
     match (&file_type, &parsed_args.schema_version) {
@@ -262,15 +262,16 @@ fn main() -> Result<()> {
     };
 
     let num_files_to_process = &files_to_process.len();
-    let teryt_mapping = match &parsed_args.schema_version {
-        SchemaVersion::Model2012 => None,
-        SchemaVersion::Model2021 => Some(get_teryt_mapping(
-            parsed_args.download_teryt,
-            &parsed_args.teryt_api_username,
-            &parsed_args.teryt_api_password,
-            &parsed_args.teryt_path,
-        )?),
-    };
+    let teryt_mapping: Option<std::sync::Arc<HashMap<String, Terc>>> =
+        match &parsed_args.schema_version {
+            SchemaVersion::Model2012 => None,
+            SchemaVersion::Model2021 => Some(std::sync::Arc::new(get_teryt_mapping(
+                parsed_args.download_teryt,
+                &parsed_args.teryt_api_username,
+                &parsed_args.teryt_api_password,
+                &parsed_args.teryt_path,
+            )?)),
+        };
     for file in &files_to_process {
         total_file_size += &file.size_in_bytes;
 

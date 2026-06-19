@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Context;
 use quick_xml::Reader;
@@ -157,7 +158,7 @@ pub fn get_teryt_mapping(
 pub fn get_address_parser_2021_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
-    teryt_mapping: &HashMap<String, Terc>,
+    teryt_mapping: &Arc<HashMap<String, Terc>>,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
@@ -174,7 +175,7 @@ pub fn get_address_parser_2021_uncompressed(
 pub fn get_address_parser_2021_zip<'a>(
     archive: &'a mut ZipArchive<File>,
     batch_size: &usize,
-    teryt_mapping: &HashMap<String, Terc>,
+    teryt_mapping: &Arc<HashMap<String, Terc>>,
     zip_file_index: usize,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
     let zip_file = archive
@@ -440,8 +441,9 @@ mod tests {
     fn test_address_parser_2021_zip_csv() {
         let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
-        let teryt_mapping =
-            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
+        let teryt_mapping = Arc::new(
+            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap(),
+        );
         let f = std::fs::File::open(&sample_file_path)
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
@@ -712,8 +714,9 @@ mod tests {
     fn test_address_parser_2021_xml_csv() {
         let file_path = PathBuf::from("fixtures/sample_model2021.xml");
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
-        let teryt_mapping =
-            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
+        let teryt_mapping = Arc::new(
+            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap(),
+        );
         let parser = get_address_parser_2021_uncompressed(&file_path, &100_000, &teryt_mapping);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
@@ -759,8 +762,9 @@ mod tests {
     fn test_address_parser_2021_zip_canonical() {
         let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
-        let teryt_mapping =
-            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
+        let teryt_mapping = Arc::new(
+            get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap(),
+        );
         let f = std::fs::File::open(&sample_file_path)
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)

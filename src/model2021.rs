@@ -307,7 +307,7 @@ pub struct AddressParser2021<R: BufRead> {
     reader: Reader<R>,
     batch_size: usize,
     mappings: Mappings,
-    teryt_names: HashMap<String, Terc>,
+    teryt_names: Arc<HashMap<String, Terc>>,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
     version: TimestampMillisecondBuilder,
@@ -339,7 +339,7 @@ impl<R: BufRead> AddressParser2021<R> {
         reader: Reader<R>,
         batch_size: usize,
         additional_info: Mappings,
-        teryt_names: HashMap<String, Terc>,
+        teryt_names: Arc<HashMap<String, Terc>>,
     ) -> Self {
         Self {
             reader,
