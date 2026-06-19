@@ -1,15 +1,17 @@
-use std::{
-    collections::HashMap,
-    io::{BufReader, Seek, Write},
-    path::PathBuf,
-};
+#[cfg(feature = "download")]
+use std::io::{Seek, Write};
+use std::{collections::HashMap, io::BufReader, path::PathBuf};
 
 use anyhow::Context;
+#[cfg(feature = "download")]
 use base64::{Engine as _, engine::general_purpose};
+#[cfg(feature = "download")]
 use chrono::Local;
 use quick_xml::de::Deserializer;
 use serde::Deserialize;
+#[cfg(feature = "download")]
 use tempfile::tempfile;
+#[cfg(feature = "download")]
 use uuid::Uuid;
 use zip::ZipArchive;
 
@@ -49,24 +51,28 @@ struct Row {
     pub stan_na: String,
 }
 
+#[cfg(feature = "download")]
 #[derive(Deserialize)]
 struct PobierzKatalogTERCResult {
     /// Contains Base64 encoded zip file
     pub plik_zawartosc: String,
 }
 
+#[cfg(feature = "download")]
 #[derive(Deserialize)]
 struct Envelope {
     #[serde(rename = "Body")]
     body: Body,
 }
 
+#[cfg(feature = "download")]
 #[derive(Deserialize)]
 struct Body {
     #[serde(rename = "PobierzKatalogTERCResponse")]
     response: PobierzKatalogTERCResponse,
 }
 
+#[cfg(feature = "download")]
 #[derive(Deserialize)]
 struct PobierzKatalogTERCResponse {
     #[serde(rename = "PobierzKatalogTERCResult")]
@@ -116,6 +122,7 @@ fn parse_terc_zip_file(teryt_file: std::fs::File) -> anyhow::Result<Teryt> {
     Ok(teryt)
 }
 
+#[cfg(feature = "download")]
 fn build_terc_soap_payload(
     message_uuid: &uuid::Uuid,
     url: &str,
@@ -153,6 +160,7 @@ fn build_terc_soap_payload(
     )
 }
 
+#[cfg(feature = "download")]
 #[test]
 fn test_build_terc_soap_payload_escapes_credentials() {
     let uuid = uuid::Uuid::nil();
@@ -172,6 +180,7 @@ fn test_build_terc_soap_payload_escapes_credentials() {
 }
 
 /// Get TERC mapping from official SOAP API. Uses today's date to get newest possible file.
+#[cfg(feature = "download")]
 pub fn download_terc_mapping(
     api_username: &str,
     api_password: &str,
@@ -203,6 +212,7 @@ pub fn download_terc_mapping(
     }
 }
 
+#[cfg(feature = "download")]
 fn get_file_content_from_response(xml_string: &String) -> anyhow::Result<Vec<u8>> {
     let mut deserializer = Deserializer::from_str(xml_string);
     let response = Envelope::deserialize(&mut deserializer)?
@@ -337,6 +347,7 @@ fn get_terc_mapping_zip() {
     assert_eq!(k0201011.voivodeship_name, "dolnośląskie");
 }
 
+#[cfg(feature = "download")]
 #[test]
 fn test_parse_api_response() {
     let response_text = include_str!("../fixtures/terc_api_response_sample.xml").to_string();
