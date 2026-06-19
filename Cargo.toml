@@ -9,23 +9,24 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:glob"]
+cli = ["download", "dep:clap", "dep:glob", "dep:geoparquet", "dep:parquet", "dep:geoarrow", "dep:geo-types", "arrow/csv"]
+download = ["dep:reqwest", "dep:base64", "dep:uuid"]
 
 [dependencies]
 anyhow = "1.0.100"
-arrow = { version = "58.1.0", default-features = false, features = ["csv", "chrono-tz"] }
-base64 = "0.22.1"
+arrow = { version = "58.1.0", default-features = false, features = ["chrono-tz"] }
+base64 = { version = "0.22.1", optional = true }
 chrono = { version = "0.4.42", default-features = false }
 chrono-tz = "0.10"
 clap = { version = "4.5.51", features = ["derive"], optional = true }
-geo-types = "0.7.18"
-geoarrow = "0.8.0"
-geoparquet = "0.8.0"
+geo-types = { version = "0.7.18", optional = true }
+geoarrow = { version = "0.8.0", optional = true }
+geoparquet = { version = "0.8.0", optional = true }
 glob = { version = "0.3.3", optional = true }
-parquet = { version = "58.1.0", features = ["arrow", "zstd", "simdutf8", "snap", "brotli"] }
+parquet = { version = "58.1.0", features = ["arrow", "zstd", "simdutf8", "snap", "brotli"], optional = true }
 proj4rs = { version = "0.1.9", features = ["crs-definitions"] }
 quick-xml = { version = "0.38.3", features = ["serialize"] }
-reqwest = { version = "0.13.1", features = ["blocking"] }
+reqwest = { version = "0.13.1", features = ["blocking"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tempfile = "3.24.0"
@@ -36,6 +37,7 @@ version = "1.19.0"
 features = [
     "v4",
 ]
+optional = true
 
 [profile.release]
 lto = true
