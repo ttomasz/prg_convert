@@ -148,7 +148,8 @@ fn parse_city<R: BufRead>(reader: &mut Reader<R>) -> City {
     loop {
         match reader.read_event_into(&mut buffer) {
             Ok(Event::Start(ref e)) => {
-                last_tag = e.name().as_ref().to_vec();
+                last_tag.clear();
+                last_tag.extend_from_slice(e.name().as_ref());
             }
             Ok(Event::Text(e)) => {
                 if last_tag.is_empty() {
@@ -210,7 +211,8 @@ fn parse_street<R: BufRead>(reader: &mut Reader<R>) -> Street {
     loop {
         match reader.read_event_into(&mut buffer) {
             Ok(Event::Start(ref e)) => {
-                last_tag = e.name().as_ref().to_vec();
+                last_tag.clear();
+                last_tag.extend_from_slice(e.name().as_ref());
             }
             Ok(Event::Text(e)) => {
                 if last_tag.is_empty() {
@@ -415,7 +417,8 @@ impl<R: BufRead> AddressParser2021<R> {
         loop {
             match self.reader.read_event_into(&mut buffer) {
                 Ok(Event::Start(ref e)) => {
-                    last_tag = e.name().as_ref().to_vec();
+                    last_tag.clear();
+                    last_tag.extend_from_slice(e.name().as_ref());
                     match e.name().as_ref() {
                         b"prgad:idIIP"
                         | b"prgad:AD_IdentyfikatorIIP"
