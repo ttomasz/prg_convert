@@ -10,6 +10,7 @@ use zip::read::ZipFile;
 
 pub mod terc;
 use terc::Terc;
+#[cfg(feature = "download")]
 use terc::download_terc_mapping;
 use terc::get_terc_mapping;
 pub mod common;
@@ -134,10 +135,20 @@ pub fn get_teryt_mapping(
     teryt_file_path: &Option<PathBuf>,
 ) -> anyhow::Result<HashMap<String, Terc>> {
     if download_teryt {
-        download_terc_mapping(
-            teryt_api_username.clone().unwrap().as_str(),
-            teryt_api_password.clone().unwrap().as_str(),
-        )
+        #[cfg(feature = "download")]
+        {
+            download_terc_mapping(
+                teryt_api_username.clone().unwrap().as_str(),
+                teryt_api_password.clone().unwrap().as_str(),
+            )
+        }
+        #[cfg(not(feature = "download"))]
+        {
+            let _ = (teryt_api_username, teryt_api_password);
+            anyhow::bail!(
+                "This build was compiled without the `download` feature; downloading TERYT is unavailable. Provide a TERYT file via --teryt-path."
+            )
+        }
     } else {
         get_terc_mapping(teryt_file_path.as_ref().unwrap())
     }

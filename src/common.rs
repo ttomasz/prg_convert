@@ -11,7 +11,9 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono_tz::Europe::Warsaw;
+#[cfg(feature = "cli")]
 use geoarrow::datatypes::Crs;
+#[cfg(feature = "cli")]
 use geoarrow::datatypes::PointType;
 use std::sync::LazyLock;
 
@@ -57,15 +59,18 @@ pub static SCHEMA_CSV: LazyLock<Arc<Schema>> = LazyLock::new(|| {
         Field::new("szerokosc_geograficzna", DataType::Float64, true),
     ]))
 });
+#[cfg(feature = "cli")]
 pub static CRS_2180: LazyLock<Crs> = LazyLock::new(|| {
     Crs::from_projjson(serde_json::from_str(include_str!("crs/epsg2180.json")).unwrap())
 });
+#[cfg(feature = "cli")]
 pub static CRS_4326: LazyLock<Crs> = LazyLock::new(|| {
     Crs::from_projjson(serde_json::from_str(include_str!("crs/epsg4326.json")).unwrap())
 });
 pub static EPSG_2180: LazyLock<Proj> = LazyLock::new(|| Proj::from_epsg_code(2180).unwrap());
 pub static EPSG_4326: LazyLock<Proj> = LazyLock::new(|| Proj::from_epsg_code(4326).unwrap());
 
+#[cfg(feature = "cli")]
 pub fn get_geoparquet_schema(geoarrow_geom_type: PointType) -> Arc<Schema> {
     Arc::new(Schema::new(vec![
         Field::new("przestrzen_nazw", DataType::Utf8, false),
