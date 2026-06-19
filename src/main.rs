@@ -1,10 +1,16 @@
+use std::sync::Arc;
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
-use arrow::{array::RecordBatch, csv::writer::WriterBuilder};
+use arrow::array::{Array, ArrayRef, Float64Array, RecordBatch};
+use arrow::csv::writer::WriterBuilder;
+use arrow::datatypes::Schema;
 use clap::Parser;
+use geoarrow::array::{GeoArrowArray, PointBuilder};
+use geoarrow::datatypes::PointType;
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperties};
+use prg_convert::CRS;
 
 mod cli;
 use prg_convert::{
@@ -21,6 +27,9 @@ enum OutputWriter {
     GeoParquet {
         writer: ArrowWriter<std::fs::File>,
         encoder: GeoParquetRecordBatchEncoder,
+        crs: CRS,
+        geom_type: PointType,
+        geoparquet_schema: Arc<Schema>,
     },
 }
 
@@ -30,9 +39,17 @@ impl OutputWriter {
             OutputWriter::Csv(w) => {
                 w.write(batch).context("Failed to write CSV batch.")?;
             }
-            OutputWriter::GeoParquet { writer, encoder } => {
+            OutputWriter::GeoParquet {
+                writer,
+                encoder,
+                crs,
+                geom_type,
+                geoparquet_schema,
+            } => {
+                let geo_batch =
+                    canonical_to_geoparquet_batch(batch, crs, geom_type, geoparquet_schema)?;
                 let encoded = encoder
-                    .encode_record_batch(batch)
+                    .encode_record_batch(&geo_batch)
                     .context("Failed to encode GeoParquet batch.")?;
                 writer
                     .write(&encoded)
@@ -48,6 +65,7 @@ impl OutputWriter {
             OutputWriter::GeoParquet {
                 mut writer,
                 encoder,
+                ..
             } => {
                 let kv_metadata = encoder
                     .into_keyvalue()
@@ -62,6 +80,58 @@ impl OutputWriter {
     }
 }
 
+/// Convert a canonical (SCHEMA_CSV-shaped) batch into a GeoParquet batch:
+/// build a `geometry` point column from the coordinate columns selected by `crs`,
+/// drop `x_epsg_2180`/`y_epsg_2180`, and reorder to match `geoparquet_schema`.
+fn canonical_to_geoparquet_batch(
+    batch: &RecordBatch,
+    crs: &CRS,
+    geom_type: &PointType,
+    geoparquet_schema: &Arc<Schema>,
+) -> anyhow::Result<RecordBatch> {
+    let (x_name, y_name) = match crs {
+        CRS::Epsg2180 => ("x_epsg_2180", "y_epsg_2180"),
+        CRS::Epsg4326 => ("dlugosc_geograficzna", "szerokosc_geograficzna"),
+    };
+    let xs = batch
+        .column_by_name(x_name)
+        .context("canonical batch missing x column")?
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .context("x column is not Float64")?;
+    let ys = batch
+        .column_by_name(y_name)
+        .context("canonical batch missing y column")?
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .context("y column is not Float64")?;
+    let points: Vec<Option<geo_types::Point>> = (0..batch.num_rows())
+        .map(|i| {
+            if xs.is_null(i) || ys.is_null(i) {
+                None
+            } else {
+                Some(geo_types::point!(x: xs.value(i), y: ys.value(i)))
+            }
+        })
+        .collect();
+    let geometry =
+        PointBuilder::from_nullable_points(points.iter().map(Option::as_ref), geom_type.clone())
+            .finish();
+
+    let mut columns: Vec<ArrayRef> = Vec::with_capacity(geoparquet_schema.fields().len());
+    for field in geoparquet_schema.fields() {
+        if field.name() == "geometry" {
+            columns.push(geometry.to_array_ref());
+        } else {
+            let col = batch
+                .column_by_name(field.name())
+                .with_context(|| format!("canonical batch missing column `{}`", field.name()))?;
+            columns.push(col.clone());
+        }
+    }
+    Ok(RecordBatch::try_new(geoparquet_schema.clone(), columns)?)
+}
+
 fn parse_file(
     file_type: &FileType,
     parsed_args: &cli::ParsedArgs,
@@ -73,14 +143,8 @@ fn parse_file(
     let mut processed_rows = 0;
     match (&file_type, &parsed_args.schema_version) {
         (FileType::XML, SchemaVersion::Model2012) => {
-            for batch in get_address_parser_2012_uncompressed(
-                &file_path,
-                &parsed_args.batch_size,
-                &parsed_args.output_format,
-                &parsed_args.crs,
-                parsed_args.arrow_schema.clone(),
-                &parsed_args.geoarrow_geom_type,
-            )? {
+            for batch in get_address_parser_2012_uncompressed(&file_path, &parsed_args.batch_size)?
+            {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
                 output_writer.write_batch(&batch)?;
@@ -95,11 +159,7 @@ fn parse_file(
             for batch in get_address_parser_2012_zip(
                 &mut archive,
                 &parsed_args.batch_size,
-                &parsed_args.output_format,
                 zip_file_index.unwrap(),
-                &parsed_args.crs,
-                parsed_args.arrow_schema.clone(),
-                &parsed_args.geoarrow_geom_type,
             )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
@@ -110,11 +170,7 @@ fn parse_file(
             for batch in get_address_parser_2021_uncompressed(
                 &file_path,
                 &parsed_args.batch_size,
-                &parsed_args.output_format,
                 teryt_mapping.as_ref().unwrap(),
-                &parsed_args.crs,
-                parsed_args.arrow_schema.clone(),
-                &parsed_args.geoarrow_geom_type,
             )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
@@ -130,12 +186,8 @@ fn parse_file(
             for batch in get_address_parser_2021_zip(
                 &mut archive,
                 &parsed_args.batch_size,
-                &parsed_args.output_format,
                 teryt_mapping.as_ref().unwrap(),
                 zip_file_index.unwrap(),
-                &parsed_args.crs,
-                parsed_args.arrow_schema.clone(),
-                &parsed_args.geoarrow_geom_type,
             )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
@@ -199,7 +251,13 @@ fn main() -> Result<()> {
             .expect("Could not create GeoParquet encoder.");
             let writer = ArrowWriter::try_new(output_file, encoder.target_schema(), Some(props))
                 .expect("Could not create GeoParquet writer.");
-            OutputWriter::GeoParquet { writer, encoder }
+            OutputWriter::GeoParquet {
+                writer,
+                encoder,
+                crs: parsed_args.crs.clone(),
+                geom_type: parsed_args.geoarrow_geom_type.clone(),
+                geoparquet_schema: parsed_args.arrow_schema.clone(),
+            }
         }
     };
 
