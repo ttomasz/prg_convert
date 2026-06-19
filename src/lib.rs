@@ -2,11 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use anyhow::Context;
-use arrow::datatypes::Schema;
-use geoarrow::datatypes::PointType;
 use quick_xml::Reader;
 use zip::ZipArchive;
 use zip::read::ZipFile;
@@ -98,42 +95,25 @@ fn get_xml_reader_from_uncompressed_file(
 pub fn get_address_parser_2012_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
-    output_format: &OutputFormat,
-    crs: &CRS,
-    arrow_schema: Arc<Schema>,
-    geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2012<std::io::BufReader<File>>> {
-    let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
+    let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
-    reader = get_xml_reader_from_uncompressed_file(file_path)?;
-    Ok(AddressParser2012::new(
-        reader,
-        batch_size.clone(),
-        output_format.clone(),
-        dict,
-        crs.clone(),
-        arrow_schema.clone(),
-        geoarrow_geom_type.clone(),
-    ))
+    let reader = get_xml_reader_from_uncompressed_file(file_path)?;
+    Ok(AddressParser2012::new(reader, *batch_size, dict))
 }
 
 pub fn get_address_parser_2012_zip<'a>(
     archive: &'a mut ZipArchive<File>,
     batch_size: &usize,
-    output_format: &OutputFormat,
     zip_file_index: usize,
-    crs: &CRS,
-    arrow_schema: Arc<Schema>,
-    geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2012<std::io::BufReader<ZipFile<'a, File>>>> {
     let zip_file = archive
         .by_index(zip_file_index)
         .with_context(|| "Could not decompress file from ZIP archive.")?;
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
-    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
-
+    reader.config_mut().expand_empty_elements = true;
     println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
 
@@ -142,17 +122,9 @@ pub fn get_address_parser_2012_zip<'a>(
         .with_context(|| "Could not decompress file from ZIP archive.")?;
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
-    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+    reader.config_mut().expand_empty_elements = true;
 
-    Ok(AddressParser2012::new(
-        reader,
-        batch_size.clone(),
-        output_format.clone(),
-        dict,
-        crs.clone(),
-        arrow_schema.clone(),
-        geoarrow_geom_type.clone(),
-    ))
+    Ok(AddressParser2012::new(reader, *batch_size, dict))
 }
 
 pub fn get_teryt_mapping(
@@ -174,45 +146,32 @@ pub fn get_teryt_mapping(
 pub fn get_address_parser_2021_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
-    output_format: &OutputFormat,
     teryt_mapping: &HashMap<String, Terc>,
-    crs: &CRS,
-    arrow_schema: Arc<Schema>,
-    geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
-    let mut reader = get_xml_reader_from_uncompressed_file(file_path)?;
+    let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
-
-    reader = get_xml_reader_from_uncompressed_file(file_path)?;
+    let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     Ok(AddressParser2021::new(
         reader,
-        batch_size.clone(),
-        output_format.clone(),
+        *batch_size,
         dict,
         teryt_mapping.clone(),
-        crs.clone(),
-        arrow_schema.clone(),
-        geoarrow_geom_type.clone(),
     ))
 }
 
 pub fn get_address_parser_2021_zip<'a>(
     archive: &'a mut ZipArchive<File>,
     batch_size: &usize,
-    output_format: &OutputFormat,
     teryt_mapping: &HashMap<String, Terc>,
     zip_file_index: usize,
-    crs: &CRS,
-    arrow_schema: Arc<Schema>,
-    geoarrow_geom_type: &PointType,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
     let zip_file = archive
         .by_index(zip_file_index)
         .with_context(|| "Could not decompress file from ZIP archive.")?;
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
-    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+    reader.config_mut().expand_empty_elements = true;
     println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
 
@@ -221,37 +180,23 @@ pub fn get_address_parser_2021_zip<'a>(
         .with_context(|| "Could not decompress file from ZIP archive.")?;
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
-    reader.config_mut().expand_empty_elements = true; // makes it easier to process empty tags (<x/>)
+    reader.config_mut().expand_empty_elements = true;
 
     Ok(AddressParser2021::new(
         reader,
-        batch_size.clone(),
-        output_format.clone(),
+        *batch_size,
         dict,
         teryt_mapping.clone(),
-        crs.clone(),
-        arrow_schema.clone(),
-        geoarrow_geom_type.clone(),
     ))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use arrow::array::{Date32Array, Float64Array, StringArray, TimestampMillisecondArray};
     use arrow::compute::concat_batches;
-    use geoarrow::datatypes::CoordType;
-
-    fn make_geoparquet_geom_type() -> PointType {
-        PointType::new(
-            geoarrow::datatypes::Dimension::XY,
-            Arc::new(geoarrow::datatypes::Metadata::new(
-                geoarrow::datatypes::Crs::from_srid("4326".to_string()),
-                None,
-            )),
-        )
-        .with_coord_type(CoordType::Separated)
-    }
 
     #[test]
     fn test_address_parser_2012_zip_csv() {
@@ -260,21 +205,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2012_zip(
-            &mut archive,
-            &1,
-            &OutputFormat::CSV,
-            0,
-            &CRS::Epsg4326,
-            crate::common::SCHEMA_CSV.clone(),
-            &PointType::new(
-                geoarrow::datatypes::Dimension::XY,
-                Arc::new(geoarrow::datatypes::Metadata::new(
-                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
-                    None,
-                )),
-            ),
-        );
+        let parser = get_address_parser_2012_zip(&mut archive, &1, 0);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -504,22 +435,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2021_zip(
-            &mut archive,
-            &1,
-            &OutputFormat::CSV,
-            &teryt_mapping,
-            1,
-            &CRS::Epsg4326,
-            crate::common::SCHEMA_CSV.clone(),
-            &PointType::new(
-                geoarrow::datatypes::Dimension::XY,
-                Arc::new(geoarrow::datatypes::Metadata::new(
-                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
-                    None,
-                )),
-            ),
-        );
+        let parser = get_address_parser_2021_zip(&mut archive, &1, &teryt_mapping, 1);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -751,20 +667,7 @@ mod tests {
     #[test]
     fn test_address_parser_2012_xml_csv() {
         let file_path = PathBuf::from("fixtures/sample_model2012.xml");
-        let parser = get_address_parser_2012_uncompressed(
-            &file_path,
-            &100_000,
-            &OutputFormat::CSV,
-            &CRS::Epsg4326,
-            crate::common::SCHEMA_CSV.clone(),
-            &PointType::new(
-                geoarrow::datatypes::Dimension::XY,
-                Arc::new(geoarrow::datatypes::Metadata::new(
-                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
-                    None,
-                )),
-            ),
-        );
+        let parser = get_address_parser_2012_uncompressed(&file_path, &100_000);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -800,21 +703,7 @@ mod tests {
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
         let teryt_mapping =
             get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
-        let parser = get_address_parser_2021_uncompressed(
-            &file_path,
-            &100_000,
-            &OutputFormat::CSV,
-            &teryt_mapping,
-            &CRS::Epsg4326,
-            crate::common::SCHEMA_CSV.clone(),
-            &PointType::new(
-                geoarrow::datatypes::Dimension::XY,
-                Arc::new(geoarrow::datatypes::Metadata::new(
-                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
-                    None,
-                )),
-            ),
-        );
+        let parser = get_address_parser_2021_uncompressed(&file_path, &100_000, &teryt_mapping);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -834,71 +723,50 @@ mod tests {
     }
 
     #[test]
-    fn test_address_parser_2012_zip_geoparquet() {
+    fn test_address_parser_2012_zip_canonical() {
         let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
-        let geom_type = make_geoparquet_geom_type();
-        let geoparquet_schema = crate::common::get_geoparquet_schema(geom_type.clone());
         let f = std::fs::File::open(&sample_file_path)
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2012_zip(
-            &mut archive,
-            &100_000,
-            &OutputFormat::GeoParquet,
-            0,
-            &CRS::Epsg4326,
-            geoparquet_schema.clone(),
-            &geom_type,
-        );
+        let parser = get_address_parser_2012_zip(&mut archive, &100_000, 0);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
             .collect();
-        let arrow_batch =
-            concat_batches(&geoparquet_schema, &batches).expect("Error in concatenating batches");
+        let arrow_batch = concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches)
+            .expect("Error in concatenating batches");
         assert_eq!(arrow_batch.num_rows(), 2);
-        assert_eq!(arrow_batch.num_columns(), 23);
-        let geometry_col = arrow_batch
-            .column_by_name("geometry")
-            .expect("Expected geometry column");
-        assert_eq!(geometry_col.null_count(), 0);
+        assert_eq!(arrow_batch.num_columns(), 24);
+        let x = arrow_batch
+            .column_by_name("x_epsg_2180")
+            .expect("Expected x_epsg_2180 column");
+        assert_eq!(x.null_count(), 0);
     }
 
     #[test]
-    fn test_address_parser_2021_zip_geoparquet() {
+    fn test_address_parser_2021_zip_canonical() {
         let sample_file_path = "fixtures/PRG-punkty_adresowe.zip";
         let teryt_file_path = "fixtures/TERC_Urzedowy_2025-11-18.zip";
         let teryt_mapping =
             get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap();
-        let geom_type = make_geoparquet_geom_type();
-        let geoparquet_schema = crate::common::get_geoparquet_schema(geom_type.clone());
         let f = std::fs::File::open(&sample_file_path)
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2021_zip(
-            &mut archive,
-            &100_000,
-            &OutputFormat::GeoParquet,
-            &teryt_mapping,
-            1,
-            &CRS::Epsg4326,
-            geoparquet_schema.clone(),
-            &geom_type,
-        );
+        let parser = get_address_parser_2021_zip(&mut archive, &100_000, &teryt_mapping, 1);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
             .collect();
-        let arrow_batch =
-            concat_batches(&geoparquet_schema, &batches).expect("Error in concatenating batches");
+        let arrow_batch = concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches)
+            .expect("Error in concatenating batches");
         assert_eq!(arrow_batch.num_rows(), 3);
-        assert_eq!(arrow_batch.num_columns(), 23);
-        let geometry_col = arrow_batch
-            .column_by_name("geometry")
-            .expect("Expected geometry column");
-        assert_eq!(geometry_col.null_count(), 0);
+        assert_eq!(arrow_batch.num_columns(), 24);
+        let x = arrow_batch
+            .column_by_name("x_epsg_2180")
+            .expect("Expected x_epsg_2180 column");
+        assert_eq!(x.null_count(), 0);
     }
 
     #[test]
@@ -908,21 +776,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2012_zip(
-            &mut archive,
-            &1,
-            &OutputFormat::CSV,
-            0,
-            &CRS::Epsg4326,
-            crate::common::SCHEMA_CSV.clone(),
-            &PointType::new(
-                geoarrow::datatypes::Dimension::XY,
-                Arc::new(geoarrow::datatypes::Metadata::new(
-                    geoarrow::datatypes::Crs::from_srid("4326".to_string()),
-                    None,
-                )),
-            ),
-        );
+        let parser = get_address_parser_2012_zip(&mut archive, &1, 0);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()

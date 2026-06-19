@@ -8,21 +8,14 @@ use arrow::array::Float64Builder;
 use arrow::array::RecordBatch;
 use arrow::array::StringBuilder;
 use arrow::array::TimestampMillisecondBuilder;
-use arrow::datatypes::Schema;
 use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use geo_types::Point;
-use geoarrow::array::GeoArrowArray;
-use geoarrow::array::PointBuilder;
-use geoarrow::datatypes::PointType;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::sync::LazyLock;
 
-use crate::CRS;
 use crate::CoordOrder;
-use crate::OutputFormat;
 use crate::common::EPOCH_DATE;
 use crate::common::get_attribute;
 use crate::common::option_append_value_or_null;
@@ -311,12 +304,8 @@ pub fn build_dictionaries<R: BufRead>(mut reader: Reader<R>) -> Mappings {
 pub struct AddressParser2021<R: BufRead> {
     reader: Reader<R>,
     batch_size: usize,
-    output_format: OutputFormat,
     mappings: Mappings,
     teryt_names: HashMap<String, Terc>,
-    crs: crate::CRS,
-    geoarrow_geom_type: PointType,
-    arrow_schema: Arc<Schema>,
     uuid: StringBuilder,
     id_namespace: StringBuilder,
     version: TimestampMillisecondBuilder,
@@ -341,29 +330,20 @@ pub struct AddressParser2021<R: BufRead> {
     municipality_teryt_id: StringBuilder,
     city_teryt_id: StringBuilder,
     street_teryt_id: StringBuilder,
-    geometry: Vec<Option<Point>>,
 }
 
 impl<R: BufRead> AddressParser2021<R> {
     pub fn new(
         reader: Reader<R>,
         batch_size: usize,
-        output_format: OutputFormat,
         additional_info: Mappings,
         teryt_names: HashMap<String, Terc>,
-        crs: crate::CRS,
-        arrow_schema: Arc<Schema>,
-        geoarrow_geom_type: PointType,
     ) -> Self {
         Self {
-            reader: reader,
-            batch_size: batch_size,
-            output_format: output_format,
+            reader,
+            batch_size,
             mappings: additional_info,
-            teryt_names: teryt_names,
-            crs: crs,
-            geoarrow_geom_type: geoarrow_geom_type,
-            arrow_schema: arrow_schema,
+            teryt_names,
             id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
             uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
             version: TimestampMillisecondBuilder::with_capacity(batch_size)
@@ -390,81 +370,40 @@ impl<R: BufRead> AddressParser2021<R> {
             municipality_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
             city_teryt_id: StringBuilder::with_capacity(batch_size, 62 * batch_size),
             street_teryt_id: StringBuilder::with_capacity(batch_size, 91 * batch_size),
-            geometry: Vec::with_capacity(batch_size),
         }
     }
 
     fn build_record_batch(&mut self) -> RecordBatch {
-        match self.output_format {
-            OutputFormat::CSV => RecordBatch::try_new(
-                self.arrow_schema.clone(),
-                vec![
-                    Arc::new(self.id_namespace.finish()),
-                    Arc::new(self.uuid.finish()),
-                    Arc::new(self.version.finish()),
-                    Arc::new(self.lifecycle_start_date.finish()),
-                    Arc::new(self.valid_since_date.finish()),
-                    Arc::new(self.valid_to_date.finish()),
-                    Arc::new(self.voivodeship_teryt_id.finish()),
-                    Arc::new(self.voivodeship.finish()),
-                    Arc::new(self.county_teryt_id.finish()),
-                    Arc::new(self.county.finish()),
-                    Arc::new(self.municipality_teryt_id.finish()),
-                    Arc::new(self.municipality.finish()),
-                    Arc::new(self.city_teryt_id.finish()),
-                    Arc::new(self.city.finish()),
-                    Arc::new(self.city_part.finish()),
-                    Arc::new(self.street_teryt_id.finish()),
-                    Arc::new(self.street.finish()),
-                    Arc::new(self.house_number.finish()),
-                    Arc::new(self.postcode.finish()),
-                    Arc::new(self.status.finish()),
-                    Arc::new(self.x_epsg_2180.finish()),
-                    Arc::new(self.y_epsg_2180.finish()),
-                    Arc::new(self.longitude.finish()),
-                    Arc::new(self.latitude.finish()),
-                ],
-            )
-            .expect("Failed to create RecordBatch"),
-            OutputFormat::GeoParquet => {
-                let iter = self.geometry.iter().map(Option::as_ref);
-                let geometry_array =
-                    PointBuilder::from_nullable_points(iter, self.geoarrow_geom_type.clone())
-                        .finish();
-                // reset geometry buffer before the next iteration
-                // arrow builders reset automatically on .finish() call
-                self.geometry = Vec::with_capacity(self.batch_size);
-                RecordBatch::try_new(
-                    self.arrow_schema.clone(),
-                    vec![
-                        Arc::new(self.id_namespace.finish()),
-                        Arc::new(self.uuid.finish()),
-                        Arc::new(self.version.finish()),
-                        Arc::new(self.lifecycle_start_date.finish()),
-                        Arc::new(self.valid_since_date.finish()),
-                        Arc::new(self.valid_to_date.finish()),
-                        Arc::new(self.voivodeship_teryt_id.finish()),
-                        Arc::new(self.voivodeship.finish()),
-                        Arc::new(self.county_teryt_id.finish()),
-                        Arc::new(self.county.finish()),
-                        Arc::new(self.municipality_teryt_id.finish()),
-                        Arc::new(self.municipality.finish()),
-                        Arc::new(self.city_teryt_id.finish()),
-                        Arc::new(self.city.finish()),
-                        Arc::new(self.city_part.finish()),
-                        Arc::new(self.street_teryt_id.finish()),
-                        Arc::new(self.street.finish()),
-                        Arc::new(self.house_number.finish()),
-                        Arc::new(self.postcode.finish()),
-                        Arc::new(self.status.finish()),
-                        Arc::new(self.longitude.finish()),
-                        Arc::new(self.latitude.finish()),
-                        Arc::new(geometry_array.to_array_ref()),
-                    ],
-                )
-                .expect("Failed to create RecordBatch")
-            }
-        }
+        RecordBatch::try_new(
+            crate::common::SCHEMA_CSV.clone(),
+            vec![
+                Arc::new(self.id_namespace.finish()),
+                Arc::new(self.uuid.finish()),
+                Arc::new(self.version.finish()),
+                Arc::new(self.lifecycle_start_date.finish()),
+                Arc::new(self.valid_since_date.finish()),
+                Arc::new(self.valid_to_date.finish()),
+                Arc::new(self.voivodeship_teryt_id.finish()),
+                Arc::new(self.voivodeship.finish()),
+                Arc::new(self.county_teryt_id.finish()),
+                Arc::new(self.county.finish()),
+                Arc::new(self.municipality_teryt_id.finish()),
+                Arc::new(self.municipality.finish()),
+                Arc::new(self.city_teryt_id.finish()),
+                Arc::new(self.city.finish()),
+                Arc::new(self.city_part.finish()),
+                Arc::new(self.street_teryt_id.finish()),
+                Arc::new(self.street.finish()),
+                Arc::new(self.house_number.finish()),
+                Arc::new(self.postcode.finish()),
+                Arc::new(self.status.finish()),
+                Arc::new(self.x_epsg_2180.finish()),
+                Arc::new(self.y_epsg_2180.finish()),
+                Arc::new(self.longitude.finish()),
+                Arc::new(self.latitude.finish()),
+            ],
+        )
+        .expect("Failed to create RecordBatch")
     }
 
     fn parse_address(&mut self) {
@@ -614,33 +553,14 @@ impl<R: BufRead> AddressParser2021<R> {
                                 None => {
                                     self.longitude.append_null();
                                     self.latitude.append_null();
-                                    match self.output_format {
-                                        OutputFormat::CSV => {
-                                            self.x_epsg_2180.append_null();
-                                            self.y_epsg_2180.append_null();
-                                        }
-                                        OutputFormat::GeoParquet => {
-                                            self.geometry.push(None);
-                                        }
-                                    }
+                                    self.x_epsg_2180.append_null();
+                                    self.y_epsg_2180.append_null();
                                 }
                                 Some(coords) => {
                                     self.longitude.append_value(coords.x4326);
                                     self.latitude.append_value(coords.y4326);
-                                    match self.output_format {
-                                        OutputFormat::CSV => {
-                                            self.x_epsg_2180.append_value(coords.x2180);
-                                            self.y_epsg_2180.append_value(coords.y2180);
-                                        }
-                                        OutputFormat::GeoParquet => match self.crs {
-                                            CRS::Epsg2180 => {
-                                                self.geometry.push(Some(geo_types::point!(x: coords.x2180, y: coords.y2180)));
-                                            }
-                                            CRS::Epsg4326 => {
-                                                self.geometry.push(Some(geo_types::point!(x: coords.x4326, y: coords.y4326)));
-                                            }
-                                        },
-                                    }
+                                    self.x_epsg_2180.append_value(coords.x2180);
+                                    self.y_epsg_2180.append_value(coords.y2180);
                                 }
                             }
                         }
@@ -719,20 +639,11 @@ impl<R: BufRead> AddressParser2021<R> {
                     if self.street_teryt_id.len() < buffer_length {
                         self.street_teryt_id.append_null();
                     }
-                    match self.output_format {
-                        OutputFormat::CSV => {
-                            if self.x_epsg_2180.len() < buffer_length {
-                                self.x_epsg_2180.append_null();
-                            }
-                            if self.y_epsg_2180.len() < buffer_length {
-                                self.y_epsg_2180.append_null();
-                            }
-                        }
-                        OutputFormat::GeoParquet => {
-                            if self.geometry.len() < buffer_length {
-                                self.geometry.push(None);
-                            }
-                        }
+                    if self.x_epsg_2180.len() < buffer_length {
+                        self.x_epsg_2180.append_null();
+                    }
+                    if self.y_epsg_2180.len() < buffer_length {
+                        self.y_epsg_2180.append_null();
                     }
                     // end of the current address entry
                     break;
