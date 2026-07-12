@@ -2,12 +2,6 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::sync::Arc;
 
-use arrow::array::ArrayBuilder;
-use arrow::array::Date32Builder;
-use arrow::array::Float64Builder;
-use arrow::array::RecordBatch;
-use arrow::array::StringBuilder;
-use arrow::array::TimestampMillisecondBuilder;
 use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -16,6 +10,7 @@ use quick_xml::events::Event;
 use std::sync::LazyLock;
 
 use crate::CoordOrder;
+use crate::common::CanonicalBuilders;
 use crate::common::EPOCH_DATE;
 use crate::common::get_attribute;
 use crate::common::option_append_value_or_null;
@@ -308,30 +303,7 @@ pub struct AddressParser2021<R: BufRead> {
     batch_size: usize,
     mappings: Mappings,
     teryt_names: Arc<HashMap<String, Terc>>,
-    uuid: StringBuilder,
-    id_namespace: StringBuilder,
-    version: TimestampMillisecondBuilder,
-    lifecycle_start_date: TimestampMillisecondBuilder,
-    valid_since_date: Date32Builder,
-    valid_to_date: Date32Builder,
-    voivodeship: StringBuilder,
-    county: StringBuilder,
-    municipality: StringBuilder,
-    city: StringBuilder,
-    city_part: StringBuilder,
-    street: StringBuilder,
-    house_number: StringBuilder,
-    postcode: StringBuilder,
-    status: StringBuilder,
-    x_epsg_2180: Float64Builder,
-    y_epsg_2180: Float64Builder,
-    longitude: Float64Builder,
-    latitude: Float64Builder,
-    voivodeship_teryt_id: StringBuilder,
-    county_teryt_id: StringBuilder,
-    municipality_teryt_id: StringBuilder,
-    city_teryt_id: StringBuilder,
-    street_teryt_id: StringBuilder,
+    builders: CanonicalBuilders,
 }
 
 impl<R: BufRead> AddressParser2021<R> {
@@ -346,66 +318,8 @@ impl<R: BufRead> AddressParser2021<R> {
             batch_size,
             mappings: additional_info,
             teryt_names,
-            id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
-            version: TimestampMillisecondBuilder::with_capacity(batch_size)
-                .with_timezone(Arc::from("UTC")),
-            lifecycle_start_date: TimestampMillisecondBuilder::with_capacity(batch_size)
-                .with_timezone(Arc::from("UTC")),
-            valid_since_date: Date32Builder::with_capacity(batch_size),
-            valid_to_date: Date32Builder::with_capacity(batch_size),
-            voivodeship: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            county: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            municipality: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            city: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            city_part: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            street: StringBuilder::with_capacity(batch_size, 12 * batch_size),
-            house_number: StringBuilder::with_capacity(batch_size, 6 * batch_size),
-            postcode: StringBuilder::with_capacity(batch_size, 6 * batch_size),
-            status: StringBuilder::with_capacity(batch_size, 10 * batch_size),
-            x_epsg_2180: Float64Builder::with_capacity(batch_size),
-            y_epsg_2180: Float64Builder::with_capacity(batch_size),
-            longitude: Float64Builder::with_capacity(batch_size),
-            latitude: Float64Builder::with_capacity(batch_size),
-            voivodeship_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
-            county_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
-            municipality_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
-            city_teryt_id: StringBuilder::with_capacity(batch_size, 62 * batch_size),
-            street_teryt_id: StringBuilder::with_capacity(batch_size, 91 * batch_size),
+            builders: CanonicalBuilders::with_capacity(batch_size),
         }
-    }
-
-    fn build_record_batch(&mut self) -> RecordBatch {
-        RecordBatch::try_new(
-            crate::common::SCHEMA_CSV.clone(),
-            vec![
-                Arc::new(self.id_namespace.finish()),
-                Arc::new(self.uuid.finish()),
-                Arc::new(self.version.finish()),
-                Arc::new(self.lifecycle_start_date.finish()),
-                Arc::new(self.valid_since_date.finish()),
-                Arc::new(self.valid_to_date.finish()),
-                Arc::new(self.voivodeship_teryt_id.finish()),
-                Arc::new(self.voivodeship.finish()),
-                Arc::new(self.county_teryt_id.finish()),
-                Arc::new(self.county.finish()),
-                Arc::new(self.municipality_teryt_id.finish()),
-                Arc::new(self.municipality.finish()),
-                Arc::new(self.city_teryt_id.finish()),
-                Arc::new(self.city.finish()),
-                Arc::new(self.city_part.finish()),
-                Arc::new(self.street_teryt_id.finish()),
-                Arc::new(self.street.finish()),
-                Arc::new(self.house_number.finish()),
-                Arc::new(self.postcode.finish()),
-                Arc::new(self.status.finish()),
-                Arc::new(self.x_epsg_2180.finish()),
-                Arc::new(self.y_epsg_2180.finish()),
-                Arc::new(self.longitude.finish()),
-                Arc::new(self.latitude.finish()),
-            ],
-        )
-        .expect("Failed to create RecordBatch")
     }
 
     fn parse_address(&mut self) {
@@ -438,11 +352,12 @@ impl<R: BufRead> AddressParser2021<R> {
                                     );
                                 }
                                 Some(c) => {
-                                    self.city.append_value(&c.name);
-                                    self.municipality_teryt_id
+                                    self.builders.city.append_value(&c.name);
+                                    self.builders
+                                        .municipality_teryt_id
                                         .append_value(&c.municipality_teryt_id);
                                     option_append_value_or_null(
-                                        &mut self.city_teryt_id,
+                                        &mut self.builders.city_teryt_id,
                                         c.city_teryt_id.clone(),
                                     );
                                     let terc_info = self.teryt_names.get(&c.municipality_teryt_id);
@@ -454,14 +369,20 @@ impl<R: BufRead> AddressParser2021<R> {
                                             );
                                         }
                                         Some(t) => {
-                                            self.voivodeship_teryt_id
+                                            self.builders
+                                                .voivodeship_teryt_id
                                                 .append_value(t.voivodeship_teryt_id.clone());
-                                            self.voivodeship
+                                            self.builders
+                                                .voivodeship
                                                 .append_value(t.voivodeship_name.clone());
-                                            self.county_teryt_id
+                                            self.builders
+                                                .county_teryt_id
                                                 .append_value(t.county_teryt_id.clone());
-                                            self.county.append_value(t.county_name.clone());
-                                            self.municipality
+                                            self.builders
+                                                .county
+                                                .append_value(t.county_name.clone());
+                                            self.builders
+                                                .municipality
                                                 .append_value(t.municipality_name.clone());
                                         }
                                     }
@@ -481,9 +402,9 @@ impl<R: BufRead> AddressParser2021<R> {
                                     );
                                 }
                                 Some(s) => {
-                                    self.street.append_value(&s.name);
+                                    self.builders.street.append_value(&s.name);
                                     option_append_value_or_null(
-                                        &mut self.street_teryt_id,
+                                        &mut self.builders.street_teryt_id,
                                         s.teryt_id.clone(),
                                     );
                                 }
@@ -507,20 +428,20 @@ impl<R: BufRead> AddressParser2021<R> {
                     let text_trimmed = text_decoded.trim();
                     match last_tag.as_slice() {
                         b"prgad:lokalnyId" => {
-                            self.uuid.append_value(text_trimmed);
+                            self.builders.uuid.append_value(text_trimmed);
                         }
                         b"prgad:przestrzenNazw" => {
-                            self.id_namespace.append_value(text_trimmed);
+                            self.builders.id_namespace.append_value(text_trimmed);
                         }
                         b"prgad:wersjaId" => {
                             let dt = DateTime::parse_from_rfc3339(text_trimmed)
                                 .expect("Failed to parse datetime")
                                 .to_utc();
-                            self.version.append_value(dt.timestamp() * 1000);
+                            self.builders.version.append_value(dt.timestamp() * 1000);
                         }
                         b"prgad:poczatekWersjiObiektu" => {
                             if text_trimmed.is_empty() {
-                                self.lifecycle_start_date.append_null();
+                                self.builders.lifecycle_start_date.append_null();
                             } else {
                                 let naive = NaiveDateTime::parse_from_str(
                                     text_trimmed,
@@ -529,41 +450,41 @@ impl<R: BufRead> AddressParser2021<R> {
                                 .expect("Failed to parse datetime");
                                 let millis = crate::common::warsaw_naive_to_utc_millis(naive)
                                     .expect("Failed to convert Warsaw local time to UTC");
-                                self.lifecycle_start_date.append_value(millis);
+                                self.builders.lifecycle_start_date.append_value(millis);
                             }
                         }
                         b"prgad:dataNadania" => {
                             if text_trimmed.is_empty() {
-                                self.valid_since_date.append_null();
+                                self.builders.valid_since_date.append_null();
                             } else {
                                 let date = NaiveDate::parse_from_str(text_trimmed, "%Y-%m-%d")
                                     .expect("Failed to parse date");
-                                self.valid_since_date.append_value(
+                                self.builders.valid_since_date.append_value(
                                     date.signed_duration_since(EPOCH_DATE).num_days() as i32,
                                 );
                             }
                         }
                         b"prgad:numerPorzadkowy" => {
-                            self.house_number.append_value(text_trimmed);
+                            self.builders.house_number.append_value(text_trimmed);
                         }
                         b"prgad:kodPocztowy" => {
-                            str_append_value_or_null(&mut self.postcode, text_trimmed);
+                            str_append_value_or_null(&mut self.builders.postcode, text_trimmed);
                         }
                         b"gml:pos" => {
                             let coords = parse_gml_pos(text_trimmed, CoordOrder::XY)
                                 .expect("Could not parse coordinates.");
                             match coords {
                                 None => {
-                                    self.longitude.append_null();
-                                    self.latitude.append_null();
-                                    self.x_epsg_2180.append_null();
-                                    self.y_epsg_2180.append_null();
+                                    self.builders.longitude.append_null();
+                                    self.builders.latitude.append_null();
+                                    self.builders.x_epsg_2180.append_null();
+                                    self.builders.y_epsg_2180.append_null();
                                 }
                                 Some(coords) => {
-                                    self.longitude.append_value(coords.x4326);
-                                    self.latitude.append_value(coords.y4326);
-                                    self.x_epsg_2180.append_value(coords.x2180);
-                                    self.y_epsg_2180.append_value(coords.y2180);
+                                    self.builders.longitude.append_value(coords.x4326);
+                                    self.builders.latitude.append_value(coords.y4326);
+                                    self.builders.x_epsg_2180.append_value(coords.x2180);
+                                    self.builders.y_epsg_2180.append_value(coords.y2180);
                                 }
                             }
                         }
@@ -577,77 +498,8 @@ impl<R: BufRead> AddressParser2021<R> {
                     last_tag.clear();
                 }
                 Ok(Event::End(ref e)) if e.name().as_ref() == ADDRESS_TAG => {
-                    let buffer_length = self.uuid.len();
                     // ensure all builders have the same length
-                    if self.id_namespace.len() < buffer_length {
-                        self.id_namespace.append_null();
-                    }
-                    if self.version.len() < buffer_length {
-                        self.version.append_null();
-                    }
-                    if self.lifecycle_start_date.len() < buffer_length {
-                        self.lifecycle_start_date.append_null();
-                    }
-                    if self.valid_since_date.len() < buffer_length {
-                        self.valid_since_date.append_null();
-                    }
-                    if self.valid_to_date.len() < buffer_length {
-                        self.valid_to_date.append_null();
-                    }
-                    if self.voivodeship.len() < buffer_length {
-                        self.voivodeship.append_null();
-                    }
-                    if self.county.len() < buffer_length {
-                        self.county.append_null();
-                    }
-                    if self.municipality.len() < buffer_length {
-                        self.municipality.append_null();
-                    }
-                    if self.city.len() < buffer_length {
-                        self.city.append_null();
-                    }
-                    if self.city_part.len() < buffer_length {
-                        self.city_part.append_null();
-                    }
-                    if self.street.len() < buffer_length {
-                        self.street.append_null();
-                    }
-                    if self.house_number.len() < buffer_length {
-                        self.house_number.append_null();
-                    }
-                    if self.postcode.len() < buffer_length {
-                        self.postcode.append_null();
-                    }
-                    if self.status.len() < buffer_length {
-                        self.status.append_null();
-                    }
-                    if self.longitude.len() < buffer_length {
-                        self.longitude.append_null();
-                    }
-                    if self.latitude.len() < buffer_length {
-                        self.latitude.append_null();
-                    }
-                    if self.voivodeship_teryt_id.len() < buffer_length {
-                        self.voivodeship_teryt_id.append_null();
-                    }
-                    if self.county_teryt_id.len() < buffer_length {
-                        self.county_teryt_id.append_null();
-                    }
-                    if self.municipality_teryt_id.len() < buffer_length {
-                        self.municipality_teryt_id.append_null();
-                    }
-                    if self.city_teryt_id.len() < buffer_length {
-                        self.city_teryt_id.append_null();
-                    }
-                    if self.street_teryt_id.len() < buffer_length {
-                        self.street_teryt_id.append_null();
-                    }
-                    if self.x_epsg_2180.len() < buffer_length {
-                        self.x_epsg_2180.append_null();
-                    }
-                    if self.y_epsg_2180.len() < buffer_length {
-                        self.y_epsg_2180.append_null();
-                    }
+                    self.builders.pad_short_columns();
                     // end of the current address entry
                     break;
                 }
@@ -682,7 +534,7 @@ impl<R: BufRead> Iterator for AddressParser2021<R> {
                         row_count += 1;
                         self.parse_address();
                         if row_count == self.batch_size {
-                            let record_batch = self.build_record_batch();
+                            let record_batch = self.builders.build_record_batch();
                             return Some(record_batch);
                         }
                     }
@@ -697,7 +549,7 @@ impl<R: BufRead> Iterator for AddressParser2021<R> {
             }
             buffer.clear();
         }
-        let record_batch = self.build_record_batch();
+        let record_batch = self.builders.build_record_batch();
         if record_batch.num_rows() > 0 {
             Some(record_batch)
         } else {
