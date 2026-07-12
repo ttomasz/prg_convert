@@ -1,4 +1,5 @@
 use std::fs::File;
+#[cfg(feature = "download")]
 use std::io::Seek;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,6 +19,7 @@ use prg_convert::common::CRS_2180;
 use prg_convert::common::CRS_4326;
 use prg_convert::common::SCHEMA_CSV;
 use prg_convert::common::get_geoparquet_schema;
+#[cfg(feature = "download")]
 use tempfile::NamedTempFile;
 use zip::ZipArchive;
 
@@ -232,6 +234,7 @@ pub(crate) fn parse_input_paths(
 pub const PRG_DOWNLOAD_URL: &str =
     "https://integracja.gugik.gov.pl/PRG/pobierz.php?adresy_zbiorcze_gml";
 
+#[cfg(feature = "download")]
 pub fn download_prg_data(
     save_path: Option<&std::path::Path>,
 ) -> anyhow::Result<Option<NamedTempFile>> {
