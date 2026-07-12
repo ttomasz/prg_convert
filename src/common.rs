@@ -2,7 +2,12 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use anyhow::Context;
+use arrow::array::ArrayBuilder;
+use arrow::array::Date32Builder;
+use arrow::array::Float64Builder;
+use arrow::array::RecordBatch;
 use arrow::array::StringBuilder;
+use arrow::array::TimestampMillisecondBuilder;
 use arrow::datatypes::DataType;
 use arrow::datatypes::Field;
 use arrow::datatypes::Schema;
@@ -105,6 +110,179 @@ pub fn get_geoparquet_schema(geoarrow_geom_type: PointType) -> Arc<Schema> {
         Field::new("szerokosc_geograficzna", DataType::Float64, true),
         geoarrow_geom_type.to_field("geometry", true),
     ]))
+}
+
+/// Owns the arrow column builders for one canonical (`SCHEMA_CSV`-shaped)
+/// batch. Shared by both schema parsers so the column set, order, and
+/// null-padding are defined in one place, next to `SCHEMA_CSV`.
+pub(crate) struct CanonicalBuilders {
+    pub(crate) uuid: StringBuilder,
+    pub(crate) id_namespace: StringBuilder,
+    pub(crate) version: TimestampMillisecondBuilder,
+    pub(crate) lifecycle_start_date: TimestampMillisecondBuilder,
+    pub(crate) valid_since_date: Date32Builder,
+    pub(crate) valid_to_date: Date32Builder,
+    pub(crate) voivodeship: StringBuilder,
+    pub(crate) county: StringBuilder,
+    pub(crate) municipality: StringBuilder,
+    pub(crate) city: StringBuilder,
+    pub(crate) city_part: StringBuilder,
+    pub(crate) street: StringBuilder,
+    pub(crate) house_number: StringBuilder,
+    pub(crate) postcode: StringBuilder,
+    pub(crate) status: StringBuilder,
+    pub(crate) x_epsg_2180: Float64Builder,
+    pub(crate) y_epsg_2180: Float64Builder,
+    pub(crate) longitude: Float64Builder,
+    pub(crate) latitude: Float64Builder,
+    pub(crate) voivodeship_teryt_id: StringBuilder,
+    pub(crate) county_teryt_id: StringBuilder,
+    pub(crate) municipality_teryt_id: StringBuilder,
+    pub(crate) city_teryt_id: StringBuilder,
+    pub(crate) street_teryt_id: StringBuilder,
+}
+
+impl CanonicalBuilders {
+    pub(crate) fn with_capacity(batch_size: usize) -> Self {
+        Self {
+            id_namespace: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            uuid: StringBuilder::with_capacity(batch_size, 36 * batch_size),
+            version: TimestampMillisecondBuilder::with_capacity(batch_size)
+                .with_timezone(Arc::from("UTC")),
+            lifecycle_start_date: TimestampMillisecondBuilder::with_capacity(batch_size)
+                .with_timezone(Arc::from("UTC")),
+            valid_since_date: Date32Builder::with_capacity(batch_size),
+            valid_to_date: Date32Builder::with_capacity(batch_size),
+            voivodeship: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            county: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            municipality: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            city: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            city_part: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            street: StringBuilder::with_capacity(batch_size, 12 * batch_size),
+            house_number: StringBuilder::with_capacity(batch_size, 6 * batch_size),
+            postcode: StringBuilder::with_capacity(batch_size, 6 * batch_size),
+            status: StringBuilder::with_capacity(batch_size, 10 * batch_size),
+            x_epsg_2180: Float64Builder::with_capacity(batch_size),
+            y_epsg_2180: Float64Builder::with_capacity(batch_size),
+            longitude: Float64Builder::with_capacity(batch_size),
+            latitude: Float64Builder::with_capacity(batch_size),
+            voivodeship_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
+            county_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
+            municipality_teryt_id: StringBuilder::with_capacity(batch_size, 54 * batch_size),
+            city_teryt_id: StringBuilder::with_capacity(batch_size, 62 * batch_size),
+            street_teryt_id: StringBuilder::with_capacity(batch_size, 91 * batch_size),
+        }
+    }
+
+    /// Finish all builders into a batch matching `SCHEMA_CSV`'s column order.
+    pub(crate) fn build_record_batch(&mut self) -> RecordBatch {
+        RecordBatch::try_new(
+            SCHEMA_CSV.clone(),
+            vec![
+                Arc::new(self.id_namespace.finish()),
+                Arc::new(self.uuid.finish()),
+                Arc::new(self.version.finish()),
+                Arc::new(self.lifecycle_start_date.finish()),
+                Arc::new(self.valid_since_date.finish()),
+                Arc::new(self.valid_to_date.finish()),
+                Arc::new(self.voivodeship_teryt_id.finish()),
+                Arc::new(self.voivodeship.finish()),
+                Arc::new(self.county_teryt_id.finish()),
+                Arc::new(self.county.finish()),
+                Arc::new(self.municipality_teryt_id.finish()),
+                Arc::new(self.municipality.finish()),
+                Arc::new(self.city_teryt_id.finish()),
+                Arc::new(self.city.finish()),
+                Arc::new(self.city_part.finish()),
+                Arc::new(self.street_teryt_id.finish()),
+                Arc::new(self.street.finish()),
+                Arc::new(self.house_number.finish()),
+                Arc::new(self.postcode.finish()),
+                Arc::new(self.status.finish()),
+                Arc::new(self.x_epsg_2180.finish()),
+                Arc::new(self.y_epsg_2180.finish()),
+                Arc::new(self.longitude.finish()),
+                Arc::new(self.latitude.finish()),
+            ],
+        )
+        .expect("Failed to create RecordBatch")
+    }
+
+    /// Called at the end of each parsed address record: `uuid` is appended for
+    /// every record, so any other column that fell one row behind it gets a
+    /// null, keeping all builders the same length.
+    pub(crate) fn pad_short_columns(&mut self) {
+        let buffer_length = self.uuid.len();
+        if self.id_namespace.len() < buffer_length {
+            self.id_namespace.append_null();
+        }
+        if self.version.len() < buffer_length {
+            self.version.append_null();
+        }
+        if self.lifecycle_start_date.len() < buffer_length {
+            self.lifecycle_start_date.append_null();
+        }
+        if self.valid_since_date.len() < buffer_length {
+            self.valid_since_date.append_null();
+        }
+        if self.valid_to_date.len() < buffer_length {
+            self.valid_to_date.append_null();
+        }
+        if self.voivodeship.len() < buffer_length {
+            self.voivodeship.append_null();
+        }
+        if self.county.len() < buffer_length {
+            self.county.append_null();
+        }
+        if self.municipality.len() < buffer_length {
+            self.municipality.append_null();
+        }
+        if self.city.len() < buffer_length {
+            self.city.append_null();
+        }
+        if self.city_part.len() < buffer_length {
+            self.city_part.append_null();
+        }
+        if self.street.len() < buffer_length {
+            self.street.append_null();
+        }
+        if self.house_number.len() < buffer_length {
+            self.house_number.append_null();
+        }
+        if self.postcode.len() < buffer_length {
+            self.postcode.append_null();
+        }
+        if self.status.len() < buffer_length {
+            self.status.append_null();
+        }
+        if self.longitude.len() < buffer_length {
+            self.longitude.append_null();
+        }
+        if self.latitude.len() < buffer_length {
+            self.latitude.append_null();
+        }
+        if self.voivodeship_teryt_id.len() < buffer_length {
+            self.voivodeship_teryt_id.append_null();
+        }
+        if self.county_teryt_id.len() < buffer_length {
+            self.county_teryt_id.append_null();
+        }
+        if self.municipality_teryt_id.len() < buffer_length {
+            self.municipality_teryt_id.append_null();
+        }
+        if self.city_teryt_id.len() < buffer_length {
+            self.city_teryt_id.append_null();
+        }
+        if self.street_teryt_id.len() < buffer_length {
+            self.street_teryt_id.append_null();
+        }
+        if self.x_epsg_2180.len() < buffer_length {
+            self.x_epsg_2180.append_null();
+        }
+        if self.y_epsg_2180.len() < buffer_length {
+            self.y_epsg_2180.append_null();
+        }
+    }
 }
 
 pub fn get_attribute<'a>(
