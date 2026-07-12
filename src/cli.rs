@@ -59,6 +59,14 @@ pub enum ParquetVersionArg {
     V2,
 }
 
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum CrsEpsgArg {
+    #[value(name = "2180")]
+    Epsg2180,
+    #[value(name = "4326")]
+    Epsg4326,
+}
+
 #[derive(clap::Parser)]
 pub struct RawArgs {
     #[arg(
@@ -126,9 +134,9 @@ pub struct RawArgs {
     parquet_version: Option<ParquetVersionArg>,
     #[arg(
         long = "crs-epsg",
-        help = "(Optional) EPSG code of Coordinate Reference System for geometry data written to geoparquet. One of: 2180, 4326. Default: 2180. Does not affect CSV format which includes coordinates in both."
+        help = "(Optional) EPSG code of Coordinate Reference System for geometry data written to geoparquet (default: 2180). Does not affect CSV format which includes coordinates in both."
     )]
-    crs_epsg: Option<i32>,
+    crs_epsg: Option<CrsEpsgArg>,
 }
 
 pub struct CompressedFile {
@@ -472,15 +480,9 @@ impl TryFrom<RawArgs> for ParsedArgs {
             None | Some(ParquetVersionArg::V2) => WriterVersion::PARQUET_2_0,
             Some(ParquetVersionArg::V1) => WriterVersion::PARQUET_1_0,
         };
-        let crs = match &value.crs_epsg {
-            None | Some(2180) => CRS::Epsg2180,
-            Some(4326) => CRS::Epsg4326,
-            _ => {
-                anyhow::bail!(
-                    "Unrecognized EPSG code: `{:?}`. Needs to be one of: 2180, 4326.",
-                    &value.crs_epsg,
-                )
-            }
+        let crs = match value.crs_epsg {
+            None | Some(CrsEpsgArg::Epsg2180) => CRS::Epsg2180,
+            Some(CrsEpsgArg::Epsg4326) => CRS::Epsg4326,
         };
         let geoarrow_crs = match crs {
             CRS::Epsg2180 => CRS_2180.clone(),
@@ -783,19 +785,19 @@ mod tests {
     // --- invalid parquet/crs options ---
 
     #[test]
-    fn test_try_into_invalid_crs_epsg() {
-        let args = RawArgs {
-            crs_epsg: Some(3857),
-            ..make_base_raw_args()
-        };
-        let result: anyhow::Result<ParsedArgs> = args.try_into();
+    fn test_parse_rejects_invalid_crs_epsg() {
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.parquet",
+            "--schema-version",
+            "2012",
+            "--output-format",
+            "geoparquet",
+            "--crs-epsg",
+            "3857",
+        ]);
         assert!(result.is_err());
-        let err_str = format!("{}", result.err().unwrap());
-        assert!(
-            err_str.contains("EPSG") || err_str.contains("Unrecognized"),
-            "Error message was: {}",
-            err_str
-        );
     }
 
     // --- download-teryt with schema 2012 warning ---
