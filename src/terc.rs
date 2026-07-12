@@ -168,15 +168,15 @@ fn test_build_terc_soap_payload_escapes_credentials() {
         &uuid,
         "https://example.test",
         "user&<>\"'",
-        "p@ss<word>",
+        "p@ss<\"word\">'",
         "2026-01-01",
     );
-    // username "user&<>\"'" fully escaped
+    // exact escaped node contents: both credentials contain quotes, so a swap
+    // to partial_escape() (which leaves quotes raw) would fail these
     assert!(payload.contains("<wsse:Username>user&amp;&lt;&gt;&quot;&apos;</wsse:Username>"));
-    // password "p@ss<word>" escaped, raw form absent
-    assert!(payload.contains("p@ss&lt;word&gt;</wsse:Password>"));
-    assert!(!payload.contains("user&<>"));
-    assert!(!payload.contains("p@ss<word>"));
+    assert!(payload.contains(">p@ss&lt;&quot;word&quot;&gt;&apos;</wsse:Password>"));
+    assert!(!payload.contains("user&<>\"'"));
+    assert!(!payload.contains("p@ss<\"word\">'"));
 }
 
 /// Get TERC mapping from official SOAP API. Uses today's date to get newest possible file.
