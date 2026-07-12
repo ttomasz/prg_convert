@@ -7,10 +7,11 @@ use arrow::csv::writer::WriterBuilder;
 use arrow::datatypes::Schema;
 use clap::Parser;
 use geoarrow::array::{GeoArrowArray, PointBuilder};
-use geoarrow::datatypes::PointType;
+use geoarrow::datatypes::{CoordType, Dimension, Metadata, PointType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use parquet::{arrow::arrow_writer::ArrowWriter, file::properties::WriterProperties};
 use prg_convert::CRS;
+use prg_convert::common::{CRS_2180, CRS_4326, get_geoparquet_schema};
 
 mod cli;
 use prg_convert::{
@@ -239,13 +240,21 @@ fn main() -> Result<()> {
             OutputWriter::Csv(WriterBuilder::new().with_header(true).build(output_file))
         }
         OutputFormat::GeoParquet => {
+            let geoarrow_crs = match parsed_args.crs {
+                CRS::Epsg2180 => CRS_2180.clone(),
+                CRS::Epsg4326 => CRS_4326.clone(),
+            };
+            let geom_type =
+                PointType::new(Dimension::XY, Arc::new(Metadata::new(geoarrow_crs, None)))
+                    .with_coord_type(CoordType::Separated);
+            let geoparquet_schema = get_geoparquet_schema(geom_type.clone());
             let props = WriterProperties::builder()
                 .set_max_row_group_row_count(Some(parsed_args.parquet_row_group_size))
                 .set_writer_version(parsed_args.parquet_version)
                 .set_compression(parsed_args.parquet_compression)
                 .build();
             let encoder = GeoParquetRecordBatchEncoder::try_new(
-                &parsed_args.arrow_schema,
+                &geoparquet_schema,
                 &GeoParquetWriterOptions::default(),
             )
             .expect("Could not create GeoParquet encoder.");
@@ -255,8 +264,8 @@ fn main() -> Result<()> {
                 writer,
                 encoder,
                 crs: parsed_args.crs,
-                geom_type: parsed_args.geoarrow_geom_type.clone(),
-                geoparquet_schema: parsed_args.arrow_schema.clone(),
+                geom_type,
+                geoparquet_schema,
             }
         }
     };

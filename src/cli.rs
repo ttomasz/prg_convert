@@ -2,23 +2,14 @@ use std::fs::File;
 #[cfg(feature = "download")]
 use std::io::Seek;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use anyhow::Context;
 use clap::ArgAction;
-use geoarrow::datatypes::CoordType;
-use geoarrow::datatypes::Dimension;
-use geoarrow::datatypes::Metadata;
-use geoarrow::datatypes::PointType;
 use glob::glob;
 use parquet::basic::BrotliLevel;
 use parquet::basic::Compression;
 use parquet::basic::ZstdLevel;
 use parquet::file::properties::WriterVersion;
-use prg_convert::common::CRS_2180;
-use prg_convert::common::CRS_4326;
-use prg_convert::common::SCHEMA_CSV;
-use prg_convert::common::get_geoparquet_schema;
 #[cfg(feature = "download")]
 use tempfile::NamedTempFile;
 use zip::ZipArchive;
@@ -295,13 +286,11 @@ pub struct ParsedArgs {
     pub batch_size: usize,
     pub schema_version: SchemaVersion,
     pub output_format: OutputFormat,
-    pub arrow_schema: Arc<arrow::datatypes::Schema>,
     pub compression_level: Option<i32>,
     pub parquet_compression: parquet::basic::Compression,
     pub parquet_row_group_size: usize,
     pub parquet_version: parquet::file::properties::WriterVersion,
     pub crs: CRS,
-    pub geoarrow_geom_type: PointType,
 }
 
 pub fn print_parsed_args(parsed_args: &ParsedArgs) {
@@ -484,17 +473,6 @@ impl TryFrom<RawArgs> for ParsedArgs {
             None | Some(CrsEpsgArg::Epsg2180) => CRS::Epsg2180,
             Some(CrsEpsgArg::Epsg4326) => CRS::Epsg4326,
         };
-        let geoarrow_crs = match crs {
-            CRS::Epsg2180 => CRS_2180.clone(),
-            CRS::Epsg4326 => CRS_4326.clone(),
-        };
-        let geoarrow_metadata = Arc::new(Metadata::new(geoarrow_crs, None));
-        let geom_type =
-            PointType::new(Dimension::XY, geoarrow_metadata).with_coord_type(CoordType::Separated);
-        let arrow_schema = match output_format {
-            OutputFormat::CSV => SCHEMA_CSV.clone(),
-            OutputFormat::GeoParquet => get_geoparquet_schema(geom_type.clone()),
-        };
         let parsed_paths = if download_data {
             vec![]
         } else {
@@ -521,13 +499,11 @@ impl TryFrom<RawArgs> for ParsedArgs {
             batch_size: batch_size,
             schema_version: schema_version,
             output_format: output_format,
-            arrow_schema: arrow_schema,
             compression_level: compression_level,
             parquet_compression: parquet_compression,
             parquet_row_group_size: parquet_row_group_size,
             parquet_version: parquet_version,
             crs: crs,
-            geoarrow_geom_type: geom_type,
         })
     }
 }
