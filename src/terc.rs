@@ -213,7 +213,7 @@ pub fn download_terc_mapping(
 }
 
 #[cfg(feature = "download")]
-fn get_file_content_from_response(xml_string: &String) -> anyhow::Result<Vec<u8>> {
+fn get_file_content_from_response(xml_string: &str) -> anyhow::Result<Vec<u8>> {
     let mut deserializer = Deserializer::from_str(xml_string);
     let response = Envelope::deserialize(&mut deserializer)?
         .body
@@ -350,8 +350,8 @@ fn get_terc_mapping_zip() {
 #[cfg(feature = "download")]
 #[test]
 fn test_parse_api_response() {
-    let response_text = include_str!("../fixtures/terc_api_response_sample.xml").to_string();
-    let bytes = get_file_content_from_response(&response_text).unwrap();
+    let response_text = include_str!("../fixtures/terc_api_response_sample.xml");
+    let bytes = get_file_content_from_response(response_text).unwrap();
     let mut file = tempfile().unwrap();
     file.write_all(&bytes).unwrap();
     file.seek(std::io::SeekFrom::Start(0)).unwrap();
