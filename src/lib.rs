@@ -139,8 +139,8 @@ pub fn get_teryt_mapping(
         #[cfg(feature = "download")]
         {
             download_terc_mapping(
-                teryt_api_username.clone().unwrap().as_str(),
-                teryt_api_password.clone().unwrap().as_str(),
+                teryt_api_username.as_deref().unwrap(),
+                teryt_api_password.as_deref().unwrap(),
             )
         }
         #[cfg(not(feature = "download"))]
