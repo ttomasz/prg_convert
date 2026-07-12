@@ -12,6 +12,8 @@ use arrow::datatypes::DataType;
 use arrow::datatypes::Field;
 use arrow::datatypes::Schema;
 use arrow::datatypes::TimeUnit;
+use chrono::Duration;
+use chrono::MappedLocalTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
@@ -372,19 +374,27 @@ pub fn parse_gml_pos(
 ///
 /// Uses the IANA tz database so winter (CET, +01:00) and summer (CEST, +02:00)
 /// are handled correctly. On an ambiguous local time (the autumn DST overlap)
-/// the earlier of the two instants is chosen; a non-existent local time (the
-/// spring-forward gap) returns an error.
+/// the earlier of the two instants is chosen. A non-existent local time (the
+/// spring-forward gap) is resolved by shifting forward past the gap, matching
+/// PostgreSQL / java.time semantics: 02:30 in a 02:00 -> 03:00 jump becomes
+/// the same instant as 03:30 CEST.
 pub fn warsaw_naive_to_utc_millis(naive: NaiveDateTime) -> anyhow::Result<i64> {
-    let dt = Warsaw
-        .from_local_datetime(&naive)
-        .earliest()
-        .with_context(|| {
-            format!(
-                "Local time `{}` does not exist in Europe/Warsaw (DST spring-forward gap).",
-                naive
-            )
-        })?;
-    Ok(dt.timestamp_millis())
+    match Warsaw.from_local_datetime(&naive) {
+        MappedLocalTime::Single(dt) => Ok(dt.timestamp_millis()),
+        MappedLocalTime::Ambiguous(earliest, _) => Ok(earliest.timestamp_millis()),
+        // every spring-forward gap in Warsaw's tz history is one hour wide,
+        // so shifting by an hour always lands on a mappable wall-clock time
+        MappedLocalTime::None => Warsaw
+            .from_local_datetime(&(naive + Duration::hours(1)))
+            .earliest()
+            .map(|dt| dt.timestamp_millis())
+            .with_context(|| {
+                format!(
+                    "Local time `{}` cannot be mapped to a Europe/Warsaw instant.",
+                    naive
+                )
+            }),
+    }
 }
 
 #[test]
@@ -412,6 +422,36 @@ fn test_warsaw_naive_to_utc_millis_winter() {
         .unwrap()
         .timestamp()
         * 1000;
+    assert_eq!(warsaw_naive_to_utc_millis(naive).unwrap(), expected);
+}
+
+#[test]
+fn test_warsaw_naive_to_utc_millis_spring_gap() {
+    // 2025-03-30 02:30:00 does not exist in Warsaw (clocks jump 02:00 -> 03:00
+    // that night). Resolved by shifting past the gap: same instant as
+    // 03:30 CEST (+02:00) -> 01:30 UTC.
+    let naive = chrono::NaiveDate::from_ymd_opt(2025, 3, 30)
+        .unwrap()
+        .and_hms_opt(2, 30, 0)
+        .unwrap();
+    let expected = chrono::DateTime::parse_from_rfc3339("2025-03-30T01:30:00Z")
+        .unwrap()
+        .timestamp_millis();
+    assert_eq!(warsaw_naive_to_utc_millis(naive).unwrap(), expected);
+}
+
+#[test]
+fn test_warsaw_naive_to_utc_millis_autumn_overlap() {
+    // 2024-10-27 02:30:00 occurs twice in Warsaw (clocks fall back
+    // 03:00 -> 02:00 that night). Policy: pick the earlier instant,
+    // i.e. CEST (+02:00) -> 00:30 UTC, not CET (+01:00) -> 01:30 UTC.
+    let naive = chrono::NaiveDate::from_ymd_opt(2024, 10, 27)
+        .unwrap()
+        .and_hms_opt(2, 30, 0)
+        .unwrap();
+    let expected = chrono::DateTime::parse_from_rfc3339("2024-10-27T00:30:00Z")
+        .unwrap()
+        .timestamp_millis();
     assert_eq!(warsaw_naive_to_utc_millis(naive).unwrap(), expected);
 }
 
