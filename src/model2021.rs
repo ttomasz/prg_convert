@@ -448,9 +448,18 @@ impl<R: BufRead> AddressParser2021<R> {
                                     "%Y-%m-%dT%H:%M:%S",
                                 )
                                 .expect("Failed to parse datetime");
-                                let millis = crate::common::warsaw_naive_to_utc_millis(naive)
-                                    .expect("Failed to convert Warsaw local time to UTC");
-                                self.builders.lifecycle_start_date.append_value(millis);
+                                match crate::common::warsaw_naive_to_utc_millis(naive) {
+                                    Ok(millis) => {
+                                        self.builders.lifecycle_start_date.append_value(millis);
+                                    }
+                                    Err(e) => {
+                                        println!(
+                                            "Warning: could not convert poczatekWersjiObiektu `{}` to UTC: {}. Writing null.",
+                                            text_trimmed, e
+                                        );
+                                        self.builders.lifecycle_start_date.append_null();
+                                    }
+                                }
                             }
                         }
                         b"prgad:dataNadania" => {
@@ -648,6 +657,69 @@ fn test_build_dictionaries() {
     assert_eq!(street.teryt_id, Some("08173".to_string()));
     assert_eq!(street.kind, "plac");
     assert_eq!(street.name, "Plac Kasztanowy");
+}
+
+#[test]
+fn test_parse_address_dst_gap_timestamp_does_not_panic() {
+    use arrow::array::TimestampMillisecondArray;
+
+    // 2025-03-30T02:30:00 falls in the Warsaw spring-forward gap (clocks jump
+    // 02:00 -> 03:00); the conversion must survive it instead of aborting.
+    let xml = r##"
+<prgad:AD_PunktAdresowy>
+  <prgad:lokalnyId>test-uuid-1</prgad:lokalnyId>
+  <prgad:przestrzenNazw>PL.TEST</prgad:przestrzenNazw>
+  <prgad:wersjaId>2025-03-30T02:30:00+02:00</prgad:wersjaId>
+  <prgad:poczatekWersjiObiektu>2025-03-30T02:30:00</prgad:poczatekWersjiObiektu>
+  <prgad:miejscowosc xlink:href="#city1"/>
+  <prgad:numerPorzadkowy>1</prgad:numerPorzadkowy>
+</prgad:AD_PunktAdresowy>
+"##;
+    let mut city = HashMap::new();
+    city.insert(
+        "city1".to_string(),
+        City {
+            name: "Sulęcin".to_string(),
+            kind: "miasto".to_string(),
+            city_teryt_id: Some("0188009".to_string()),
+            municipality_teryt_id: "0807043".to_string(),
+        },
+    );
+    let mut teryt = HashMap::new();
+    teryt.insert(
+        "0807043".to_string(),
+        Terc {
+            voivodeship_teryt_id: "08".to_string(),
+            voivodeship_name: "lubuskie".to_string(),
+            county_teryt_id: "0807".to_string(),
+            county_name: "sulęciński".to_string(),
+            municipality_name: "Sulęcin".to_string(),
+        },
+    );
+    let mut reader = Reader::from_reader(xml.as_bytes());
+    reader.config_mut().expand_empty_elements = true;
+    let parser = AddressParser2021::new(
+        reader,
+        100,
+        Mappings {
+            city,
+            street: HashMap::new(),
+        },
+        Arc::new(teryt),
+    );
+    let batches: Vec<arrow::array::RecordBatch> = parser.collect();
+    assert_eq!(batches.len(), 1);
+    assert_eq!(batches[0].num_rows(), 1);
+    let expected = chrono::DateTime::parse_from_rfc3339("2025-03-30T01:30:00Z")
+        .unwrap()
+        .timestamp_millis();
+    let column: &TimestampMillisecondArray = batches[0]
+        .column_by_name("poczatek_wersji_obiektu")
+        .unwrap()
+        .as_any()
+        .downcast_ref()
+        .unwrap();
+    assert_eq!(column.value(0), expected);
 }
 
 #[test]
