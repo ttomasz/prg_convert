@@ -206,7 +206,7 @@ pub fn warsaw_naive_to_utc_millis(naive: NaiveDateTime) -> anyhow::Result<i64> {
                 naive
             )
         })?;
-    Ok(dt.timestamp() * 1000)
+    Ok(dt.timestamp_millis())
 }
 
 #[test]
