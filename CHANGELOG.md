@@ -1,11 +1,13 @@
 # Changelog
 
-## [v0.6.5] - 
+## [v0.7.0] - 2026-07-17
 
 ### Changed
 
 - updated arrow from v56 to v58
 - refactored code so CLI dependencies are not required if using the project as library in another project
+- improved handling of timestamps (missing, timezone issues)
+- escape problematic characters in password to TERYT API
 
 ## [v0.6.4] - 2026-03-25
 
