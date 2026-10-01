@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.8.0] - 2026-10-01
+
+### Changed
+
+- the order of the two numbers in `gml:pos` is now read from each point's `srsName` instead of being fixed per schema: `EPSG:2180` means easting first, any other form (including `urn:ogc:def:crs:EPSG::2180`) or a missing attribute means northing first. GUGiK's 2021-schema files switched from the first layout to the second on 2026-10-01; v0.7.0 reads those files with every point mirrored
+- **breaking (library):** `get_address_parser_2012_uncompressed`, `get_address_parser_2012_zip`, `get_address_parser_2021_uncompressed` and `get_address_parser_2021_zip` take a new last argument `coordinate_order: Option<CoordOrder>`; `None` follows `srsName`, `Some` forces an order
+- `proj4rs` minimum raised to 0.1.10 and the lockfile brought up to date. With `crs-definitions` 0.4.0 that it brings, EPSG:2180 projects to a latitude about 0.1 mm (9e-10°) north of what 0.1.9 gave; longitudes move in the last bit at most
+
+### Added
+
+- flag `--coordinate-order auto|xy|yx` (default `auto`) to force the order for a file whose `srsName` is wrong
+- `common::coord_order_for_srs_name`, the rule above as a function
+
 ## [v0.7.0] - 2026-07-17
 
 ### Changed
