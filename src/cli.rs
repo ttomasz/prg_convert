@@ -15,6 +15,7 @@ use tempfile::NamedTempFile;
 use zip::ZipArchive;
 
 use prg_convert::CRS;
+use prg_convert::CoordOrder;
 use prg_convert::FileType;
 use prg_convert::OutputFormat;
 use prg_convert::SchemaVersion;
@@ -56,6 +57,13 @@ pub enum CrsEpsgArg {
     Epsg2180,
     #[value(name = "4326")]
     Epsg4326,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum CoordinateOrderArg {
+    Auto,
+    Xy,
+    Yx,
 }
 
 #[derive(clap::Parser)]
@@ -128,6 +136,12 @@ pub struct RawArgs {
         help = "(Optional) EPSG code of Coordinate Reference System for geometry data written to geoparquet (default: 2180). Does not affect CSV format which includes coordinates in both."
     )]
     crs_epsg: Option<CrsEpsgArg>,
+    #[arg(
+        long = "coordinate-order",
+        ignore_case = true,
+        help = "(Optional) Order of the two numbers in each gml:pos. `auto` follows the srsName declared on each point (`EPSG:2180`: easting first, anything else: northing first); `xy` forces easting first and `yx` northing first, for a file whose declaration is wrong (default: auto)."
+    )]
+    coordinate_order: Option<CoordinateOrderArg>,
 }
 
 pub struct CompressedFile {
@@ -291,6 +305,8 @@ pub struct ParsedArgs {
     pub parquet_row_group_size: usize,
     pub parquet_version: parquet::file::properties::WriterVersion,
     pub crs: CRS,
+    /// `None` is `auto`: each point is read in the order its `srsName` declares.
+    pub coordinate_order: Option<CoordOrder>,
 }
 
 pub fn print_parsed_args(parsed_args: &ParsedArgs) {
@@ -370,6 +386,10 @@ pub fn print_parsed_args(parsed_args: &ParsedArgs) {
         }
     }
     println!("  Batch size: {}", parsed_args.batch_size);
+    match parsed_args.coordinate_order {
+        None => println!("  Coordinate order: auto (from srsName)"),
+        Some(order) => println!("  Coordinate order: {:?} (forced)", order),
+    }
     if let OutputFormat::GeoParquet = parsed_args.output_format {
         println!("  Parquet compression: {}", parsed_args.parquet_compression);
         if parsed_args.compression_level.is_some() {
@@ -473,6 +493,11 @@ impl TryFrom<RawArgs> for ParsedArgs {
             None | Some(CrsEpsgArg::Epsg2180) => CRS::Epsg2180,
             Some(CrsEpsgArg::Epsg4326) => CRS::Epsg4326,
         };
+        let coordinate_order = match value.coordinate_order {
+            None | Some(CoordinateOrderArg::Auto) => None,
+            Some(CoordinateOrderArg::Xy) => Some(CoordOrder::XY),
+            Some(CoordinateOrderArg::Yx) => Some(CoordOrder::YX),
+        };
         let parsed_paths = if download_data {
             vec![]
         } else {
@@ -504,6 +529,7 @@ impl TryFrom<RawArgs> for ParsedArgs {
             parquet_row_group_size: parquet_row_group_size,
             parquet_version: parquet_version,
             crs: crs,
+            coordinate_order,
         })
     }
 }
@@ -530,6 +556,7 @@ mod tests {
             parquet_row_group_size: None,
             parquet_version: None,
             crs_epsg: None,
+            coordinate_order: None,
         }
     }
 
@@ -772,6 +799,57 @@ mod tests {
             "geoparquet",
             "--crs-epsg",
             "3857",
+        ]);
+        assert!(result.is_err());
+    }
+
+    // --- coordinate order ---
+
+    #[test]
+    fn test_coordinate_order_defaults_to_auto() {
+        let parsed: ParsedArgs = make_base_raw_args().try_into().expect("Expected Ok result");
+        assert_eq!(parsed.coordinate_order, None);
+    }
+
+    #[test]
+    fn test_coordinate_order_values() {
+        for (value, expected) in [
+            ("auto", None),
+            ("xy", Some(CoordOrder::XY)),
+            ("yx", Some(CoordOrder::YX)),
+            ("YX", Some(CoordOrder::YX)),
+        ] {
+            let raw = RawArgs::try_parse_from([
+                "prg_convert",
+                "--input-paths",
+                "fixtures/sample_model2012.xml",
+                "--output-path",
+                "/tmp/o.csv",
+                "--schema-version",
+                "2012",
+                "--output-format",
+                "csv",
+                "--coordinate-order",
+                value,
+            ])
+            .unwrap_or_else(|e| panic!("`{value}` should parse: {e}"));
+            let parsed: ParsedArgs = raw.try_into().expect("Expected Ok result");
+            assert_eq!(parsed.coordinate_order, expected, "for `{value}`");
+        }
+    }
+
+    #[test]
+    fn test_parse_rejects_invalid_coordinate_order() {
+        let result = RawArgs::try_parse_from([
+            "prg_convert",
+            "--output-path",
+            "/tmp/o.csv",
+            "--schema-version",
+            "2012",
+            "--output-format",
+            "csv",
+            "--coordinate-order",
+            "ne",
         ]);
         assert!(result.is_err());
     }

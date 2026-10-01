@@ -144,8 +144,11 @@ fn parse_file(
     let mut processed_rows = 0;
     match (&file_type, &parsed_args.schema_version) {
         (FileType::XML, SchemaVersion::Model2012) => {
-            for batch in get_address_parser_2012_uncompressed(&file_path, &parsed_args.batch_size)?
-            {
+            for batch in get_address_parser_2012_uncompressed(
+                &file_path,
+                &parsed_args.batch_size,
+                parsed_args.coordinate_order,
+            )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
                 output_writer.write_batch(&batch)?;
@@ -161,6 +164,7 @@ fn parse_file(
                 &mut archive,
                 &parsed_args.batch_size,
                 zip_file_index.unwrap(),
+                parsed_args.coordinate_order,
             )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
@@ -172,6 +176,7 @@ fn parse_file(
                 &file_path,
                 &parsed_args.batch_size,
                 teryt_mapping.as_ref().unwrap(),
+                parsed_args.coordinate_order,
             )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());
@@ -189,6 +194,7 @@ fn parse_file(
                 &parsed_args.batch_size,
                 teryt_mapping.as_ref().unwrap(),
                 zip_file_index.unwrap(),
+                parsed_args.coordinate_order,
             )? {
                 processed_rows += batch.num_rows();
                 println!("Read batch of {} addresses.", batch.num_rows());

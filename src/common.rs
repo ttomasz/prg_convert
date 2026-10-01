@@ -300,6 +300,51 @@ pub fn get_attribute<'a>(
         .expect("Could not decode attribute value.")
 }
 
+/// Like [`get_attribute`], but `None` instead of a panic when the element does
+/// not carry the attribute.
+pub fn try_get_attribute<'a>(
+    event_start: &'a quick_xml::events::BytesStart<'_>,
+    attribute: &'a [u8],
+) -> Option<Cow<'a, str>> {
+    event_start
+        .attributes()
+        .find(|a| a.as_ref().expect("Could not parse attribute.").key.as_ref() == attribute)
+        .map(|a| {
+            a.expect("Could not parse attribute.")
+                .decode_and_unescape_value(event_start.decoder())
+                .expect("Could not decode attribute value.")
+        })
+}
+
+/// The `srsName` form that means easting first; see
+/// [`coord_order_for_srs_name`].
+const SRS_NAME_EASTING_FIRST: &str = "EPSG:2180";
+
+/// The order of the two numbers in a `<gml:pos>`, from the `srsName` of the
+/// `<gml:Point>` around it.
+///
+/// PRG files have used both orders, and the `srsName` form has told them apart
+/// every time:
+///
+/// | files | `srsName` | order |
+/// |---|---|---|
+/// | 2012 schema | `urn:ogc:def:crs:EPSG::2180` | northing easting |
+/// | 2021 schema until August 2026 | `EPSG:2180` | easting northing |
+/// | 2021 schema from 2026-10-01 | `urn:ogc:def:crs:EPSG::2180` | northing easting |
+///
+/// That is the usual GML convention: the URN form promises the authority's
+/// axis order, which for EPSG:2180 is northing, easting, while the short
+/// `EPSG:code` form is the legacy "x first" spelling. So only the short form
+/// reads as [`CoordOrder::XY`]. Everything else -- the URN, any other form,
+/// and a point with no `srsName` at all -- reads as [`CoordOrder::YX`], the
+/// official order and the one current files use.
+pub fn coord_order_for_srs_name(srs_name: Option<&str>) -> CoordOrder {
+    match srs_name {
+        Some(name) if name.trim().eq_ignore_ascii_case(SRS_NAME_EASTING_FIRST) => CoordOrder::XY,
+        _ => CoordOrder::YX,
+    }
+}
+
 pub fn str_append_value_or_null(builder: &mut StringBuilder, value: &str) {
     if value.is_empty() {
         builder.append_null();
@@ -471,6 +516,26 @@ fn test_get_attribute_returns_value() {
             _ => {}
         }
     }
+}
+
+#[test]
+fn test_coord_order_for_srs_name() {
+    // The short form is the only one that means easting first.
+    assert_eq!(coord_order_for_srs_name(Some("EPSG:2180")), CoordOrder::XY);
+    assert_eq!(
+        coord_order_for_srs_name(Some(" epsg:2180 ")),
+        CoordOrder::XY
+    );
+    assert_eq!(
+        coord_order_for_srs_name(Some("urn:ogc:def:crs:EPSG::2180")),
+        CoordOrder::YX
+    );
+    assert_eq!(
+        coord_order_for_srs_name(Some("http://www.opengis.net/def/crs/EPSG/0/2180")),
+        CoordOrder::YX
+    );
+    assert_eq!(coord_order_for_srs_name(Some("")), CoordOrder::YX);
+    assert_eq!(coord_order_for_srs_name(None), CoordOrder::YX);
 }
 
 #[test]

@@ -12,10 +12,12 @@ use std::sync::LazyLock;
 use crate::CoordOrder;
 use crate::common::CanonicalBuilders;
 use crate::common::EPOCH_DATE;
+use crate::common::coord_order_for_srs_name;
 use crate::common::get_attribute;
 use crate::common::option_append_value_or_null;
 use crate::common::parse_gml_pos;
 use crate::common::str_append_value_or_null;
+use crate::common::try_get_attribute;
 use crate::terc::Terc;
 
 const CITY_TAG: &[u8] = b"prgad:AD_Miejscowosc";
@@ -304,6 +306,9 @@ pub struct AddressParser2021<R: BufRead> {
     mappings: Mappings,
     teryt_names: Arc<HashMap<String, Terc>>,
     builders: CanonicalBuilders,
+    /// `Some` forces the order of every `<gml:pos>`; `None` follows each
+    /// point's own `srsName`.
+    coordinate_order: Option<CoordOrder>,
 }
 
 impl<R: BufRead> AddressParser2021<R> {
@@ -312,6 +317,7 @@ impl<R: BufRead> AddressParser2021<R> {
         batch_size: usize,
         additional_info: Mappings,
         teryt_names: Arc<HashMap<String, Terc>>,
+        coordinate_order: Option<CoordOrder>,
     ) -> Self {
         Self {
             reader,
@@ -319,6 +325,7 @@ impl<R: BufRead> AddressParser2021<R> {
             mappings: additional_info,
             teryt_names,
             builders: CanonicalBuilders::with_capacity(batch_size),
+            coordinate_order,
         }
     }
 
@@ -327,6 +334,8 @@ impl<R: BufRead> AddressParser2021<R> {
         let mut last_tag = Vec::new();
         let mut nested_tag = false; // informs if we're processing a nested tag
         let mut tag_ignore_text = false; // informs if we're processing a tag that won't have any text content
+        // order declared by the enclosing <gml:Point>; a <gml:pos> outside one gets the default
+        let mut declared_order = coord_order_for_srs_name(None);
         // inside loop to process the content of the current address
         loop {
             match self.reader.read_event_into(&mut buffer) {
@@ -334,12 +343,16 @@ impl<R: BufRead> AddressParser2021<R> {
                     last_tag.clear();
                     last_tag.extend_from_slice(e.name().as_ref());
                     match e.name().as_ref() {
-                        b"prgad:idIIP"
-                        | b"prgad:AD_IdentyfikatorIIP"
-                        | b"prgad:georeferencja"
-                        | b"gml:Point" => {
+                        b"prgad:idIIP" | b"prgad:AD_IdentyfikatorIIP" | b"prgad:georeferencja" => {
                             nested_tag = true;
                             tag_ignore_text = false;
+                        }
+                        b"gml:Point" => {
+                            nested_tag = true;
+                            tag_ignore_text = false;
+                            declared_order = coord_order_for_srs_name(
+                                try_get_attribute(e, b"srsName").as_deref(),
+                            );
                         }
                         b"prgad:miejscowosc" => {
                             let id = &get_attribute(e, b"xlink:href")[1..];
@@ -480,7 +493,8 @@ impl<R: BufRead> AddressParser2021<R> {
                             str_append_value_or_null(&mut self.builders.postcode, text_trimmed);
                         }
                         b"gml:pos" => {
-                            let coords = parse_gml_pos(text_trimmed, CoordOrder::XY)
+                            let order = self.coordinate_order.unwrap_or(declared_order);
+                            let coords = parse_gml_pos(text_trimmed, order)
                                 .expect("Could not parse coordinates.");
                             match coords {
                                 None => {
@@ -706,6 +720,7 @@ fn test_parse_address_dst_gap_timestamp_does_not_panic() {
             street: HashMap::new(),
         },
         Arc::new(teryt),
+        None,
     );
     let batches: Vec<arrow::array::RecordBatch> = parser.collect();
     assert_eq!(batches.len(), 1);

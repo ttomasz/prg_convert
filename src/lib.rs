@@ -20,7 +20,14 @@ use model2012::AddressParser2012;
 mod model2021;
 use model2021::AddressParser2021;
 
-#[derive(Clone, Copy)]
+/// Order of the two numbers inside a `<gml:pos>` element.
+///
+/// `XY` is easting first, `YX` is northing first. EPSG:2180's official axis
+/// order is northing, easting, so `YX` is what a file gets by following the
+/// standard; `XY` is the order the 2021-schema files used until 2026-10-01.
+/// See [`common::coord_order_for_srs_name`] for how a file's own declaration
+/// picks between them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoordOrder {
     XY,
     YX,
@@ -94,21 +101,32 @@ fn get_xml_reader_from_uncompressed_file(
     Ok(reader)
 }
 
+/// `coordinate_order` forces the order of every `<gml:pos>`; `None` reads each
+/// point in the order its `srsName` declares (see
+/// [`common::coord_order_for_srs_name`]). The same holds for all four
+/// `get_address_parser_*` functions.
 pub fn get_address_parser_2012_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
+    coordinate_order: Option<CoordOrder>,
 ) -> anyhow::Result<AddressParser2012<std::io::BufReader<File>>> {
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
-    Ok(AddressParser2012::new(reader, *batch_size, dict))
+    Ok(AddressParser2012::new(
+        reader,
+        *batch_size,
+        dict,
+        coordinate_order,
+    ))
 }
 
 pub fn get_address_parser_2012_zip<'a>(
     archive: &'a mut ZipArchive<File>,
     batch_size: &usize,
     zip_file_index: usize,
+    coordinate_order: Option<CoordOrder>,
 ) -> anyhow::Result<AddressParser2012<std::io::BufReader<ZipFile<'a, File>>>> {
     let zip_file = archive
         .by_index(zip_file_index)
@@ -126,7 +144,12 @@ pub fn get_address_parser_2012_zip<'a>(
     let mut reader = Reader::from_reader(buf_reader);
     reader.config_mut().expand_empty_elements = true;
 
-    Ok(AddressParser2012::new(reader, *batch_size, dict))
+    Ok(AddressParser2012::new(
+        reader,
+        *batch_size,
+        dict,
+        coordinate_order,
+    ))
 }
 
 pub fn get_teryt_mapping(
@@ -159,6 +182,7 @@ pub fn get_address_parser_2021_uncompressed(
     file_path: &PathBuf,
     batch_size: &usize,
     teryt_mapping: &Arc<HashMap<String, Terc>>,
+    coordinate_order: Option<CoordOrder>,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     println!("Building dictionaries...");
@@ -169,6 +193,7 @@ pub fn get_address_parser_2021_uncompressed(
         *batch_size,
         dict,
         teryt_mapping.clone(),
+        coordinate_order,
     ))
 }
 
@@ -177,6 +202,7 @@ pub fn get_address_parser_2021_zip<'a>(
     batch_size: &usize,
     teryt_mapping: &Arc<HashMap<String, Terc>>,
     zip_file_index: usize,
+    coordinate_order: Option<CoordOrder>,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<ZipFile<'a, File>>>> {
     let zip_file = archive
         .by_index(zip_file_index)
@@ -199,6 +225,7 @@ pub fn get_address_parser_2021_zip<'a>(
         *batch_size,
         dict,
         teryt_mapping.clone(),
+        coordinate_order,
     ))
 }
 
@@ -217,7 +244,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2012_zip(&mut archive, &1, 0);
+        let parser = get_address_parser_2012_zip(&mut archive, &1, 0, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -418,7 +445,7 @@ mod tests {
             .unwrap();
         assert_eq!(&y_epsg_2180, &expected_y_epsg_2180);
         let expected_dlugosc_geograficzna =
-            &Float64Array::from(vec![15.9121240698886, 15.911799807186908]);
+            &Float64Array::from(vec![15.912124069888604, 15.911799807186908]);
         let dlugosc_geograficzna: &Float64Array = &arrow_batch
             .column_by_name("dlugosc_geograficzna")
             .unwrap()
@@ -427,7 +454,7 @@ mod tests {
             .unwrap();
         assert_eq!(&dlugosc_geograficzna, &expected_dlugosc_geograficzna);
         let expected_szerokosc_geograficzna =
-            &Float64Array::from(vec![51.92977532639213, 51.92997049675426]);
+            &Float64Array::from(vec![51.929775327307524, 51.92997049766966]);
         let szerokosc_geograficzna: &Float64Array = &arrow_batch
             .column_by_name("szerokosc_geograficzna")
             .unwrap()
@@ -448,7 +475,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2021_zip(&mut archive, &1, &teryt_mapping, 1);
+        let parser = get_address_parser_2021_zip(&mut archive, &1, &teryt_mapping, 1, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -657,7 +684,7 @@ mod tests {
         let expected_dlugosc_geograficzna = &Float64Array::from(vec![
             15.149797186509767,
             14.839103470789498,
-            15.24431221852159,
+            15.244312218521593,
         ]);
         let dlugosc_geograficzna: &Float64Array = &arrow_batch
             .column_by_name("dlugosc_geograficzna")
@@ -666,8 +693,11 @@ mod tests {
             .downcast_ref()
             .unwrap();
         assert_eq!(&dlugosc_geograficzna, &expected_dlugosc_geograficzna);
-        let expected_szerokosc_geograficzna =
-            &Float64Array::from(vec![52.48080576032958, 52.3434219342925, 52.51278706040695]);
+        let expected_szerokosc_geograficzna = &Float64Array::from(vec![
+            52.48080576124044,
+            52.343421935204525,
+            52.51278706131754,
+        ]);
         let szerokosc_geograficzna: &Float64Array = &arrow_batch
             .column_by_name("szerokosc_geograficzna")
             .unwrap()
@@ -680,7 +710,7 @@ mod tests {
     #[test]
     fn test_address_parser_2012_xml_csv() {
         let file_path = PathBuf::from("fixtures/sample_model2012.xml");
-        let parser = get_address_parser_2012_uncompressed(&file_path, &100_000);
+        let parser = get_address_parser_2012_uncompressed(&file_path, &100_000, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -717,7 +747,8 @@ mod tests {
         let teryt_mapping = Arc::new(
             get_teryt_mapping(false, &None, &None, &Some(PathBuf::from(teryt_file_path))).unwrap(),
         );
-        let parser = get_address_parser_2021_uncompressed(&file_path, &100_000, &teryt_mapping);
+        let parser =
+            get_address_parser_2021_uncompressed(&file_path, &100_000, &teryt_mapping, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -743,7 +774,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2012_zip(&mut archive, &100_000, 0);
+        let parser = get_address_parser_2012_zip(&mut archive, &100_000, 0, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -769,7 +800,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2021_zip(&mut archive, &100_000, &teryt_mapping, 1);
+        let parser = get_address_parser_2021_zip(&mut archive, &100_000, &teryt_mapping, 1, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -791,7 +822,7 @@ mod tests {
             .expect(format!("Failed to open file: `{}`.", &sample_file_path).as_str());
         let mut archive = ZipArchive::new(f)
             .expect(format!("Failed to decompress ZIP file: `{}`.", &sample_file_path).as_str());
-        let parser = get_address_parser_2012_zip(&mut archive, &1, 0);
+        let parser = get_address_parser_2012_zip(&mut archive, &1, 0, None);
         let batches: Vec<arrow::array::RecordBatch> = parser
             .expect("Something wrong while creating parser object.")
             .into_iter()
@@ -799,5 +830,168 @@ mod tests {
         assert_eq!(batches.len(), 2);
         assert_eq!(batches[0].num_rows(), 1);
         assert_eq!(batches[1].num_rows(), 1);
+    }
+
+    // --- coordinate order ---
+
+    const SRS_SHORT: &str = r#"srsName="EPSG:2180""#;
+    const SRS_URN: &str = r#"srsName="urn:ogc:def:crs:EPSG::2180""#;
+
+    /// The same document with the two numbers of every `<gml:pos>` exchanged.
+    fn exchange_gml_pos(xml: &str) -> String {
+        const OPEN: &str = "<gml:pos>";
+        let mut out = String::with_capacity(xml.len());
+        let mut rest = xml;
+        while let Some(start) = rest.find(OPEN) {
+            let body_start = start + OPEN.len();
+            let body_end = body_start + rest[body_start..].find("</gml:pos>").unwrap();
+            out.push_str(&rest[..body_start]);
+            let mut numbers = rest[body_start..body_end].split_whitespace();
+            let (first, second) = (numbers.next().unwrap(), numbers.next().unwrap());
+            out.push_str(&format!("{second} {first}"));
+            rest = &rest[body_end..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// The four coordinate columns as raw bits, so equality means the very
+    /// same `f64`s and not merely close ones.
+    fn coordinate_bits(batch: &arrow::array::RecordBatch) -> Vec<Vec<Option<u64>>> {
+        [
+            "x_epsg_2180",
+            "y_epsg_2180",
+            "dlugosc_geograficzna",
+            "szerokosc_geograficzna",
+        ]
+        .iter()
+        .map(|name| {
+            let column: &Float64Array = batch
+                .column_by_name(name)
+                .unwrap()
+                .as_any()
+                .downcast_ref()
+                .unwrap();
+            column.iter().map(|v| v.map(f64::to_bits)).collect()
+        })
+        .collect()
+    }
+
+    fn write_temp_xml(xml: &str) -> tempfile::NamedTempFile {
+        let file = tempfile::Builder::new().suffix(".xml").tempfile().unwrap();
+        std::fs::write(file.path(), xml).unwrap();
+        file
+    }
+
+    fn parse_2021(xml: &str, coordinate_order: Option<CoordOrder>) -> arrow::array::RecordBatch {
+        let file = write_temp_xml(xml);
+        let teryt_mapping = Arc::new(
+            get_teryt_mapping(
+                false,
+                &None,
+                &None,
+                &Some(PathBuf::from("fixtures/TERC_Urzedowy_2025-11-18.zip")),
+            )
+            .unwrap(),
+        );
+        let batches: Vec<arrow::array::RecordBatch> = get_address_parser_2021_uncompressed(
+            &file.path().to_path_buf(),
+            &100_000,
+            &teryt_mapping,
+            coordinate_order,
+        )
+        .unwrap()
+        .collect();
+        concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches).unwrap()
+    }
+
+    fn parse_2012(xml: &str, coordinate_order: Option<CoordOrder>) -> arrow::array::RecordBatch {
+        let file = write_temp_xml(xml);
+        let batches: Vec<arrow::array::RecordBatch> = get_address_parser_2012_uncompressed(
+            &file.path().to_path_buf(),
+            &100_000,
+            coordinate_order,
+        )
+        .unwrap()
+        .collect();
+        concat_batches(&crate::common::SCHEMA_CSV.clone(), &batches).unwrap()
+    }
+
+    /// `[x, y, lon, lat]` with x and y exchanged, lon/lat left alone -- for
+    /// comparing the EPSG:2180 columns of a mirrored parse.
+    fn with_x_and_y_exchanged(bits: &[Vec<Option<u64>>]) -> Vec<Vec<Option<u64>>> {
+        vec![bits[1].clone(), bits[0].clone()]
+    }
+
+    /// GUGiK's 2021-schema files changed on 2026-10-01 from
+    /// `srsName="EPSG:2180"` with easting first to the URN form with northing
+    /// first. Read in `auto`, both layouts must give the very same positions.
+    #[test]
+    fn test_2021_urn_layout_parses_to_the_same_positions_as_the_short_layout() {
+        let original = std::fs::read_to_string("fixtures/sample_model2021.xml").unwrap();
+        assert!(original.contains(SRS_SHORT));
+        let october = exchange_gml_pos(&original.replace(SRS_SHORT, SRS_URN));
+        assert_ne!(original, october);
+
+        let expected = coordinate_bits(&parse_2021(&original, None));
+        assert!(expected[0].iter().all(Option::is_some));
+        assert_eq!(coordinate_bits(&parse_2021(&october, None)), expected);
+    }
+
+    #[test]
+    fn test_2021_point_without_srs_name_is_read_northing_first() {
+        let original = std::fs::read_to_string("fixtures/sample_model2021.xml").unwrap();
+        let undeclared = exchange_gml_pos(&original.replace(SRS_SHORT, ""));
+        assert!(!undeclared.contains("srsName"));
+
+        assert_eq!(
+            coordinate_bits(&parse_2021(&undeclared, None)),
+            coordinate_bits(&parse_2021(&original, None))
+        );
+    }
+
+    #[test]
+    fn test_2021_forced_order_overrides_the_declaration() {
+        let original = std::fs::read_to_string("fixtures/sample_model2021.xml").unwrap();
+        let auto = coordinate_bits(&parse_2021(&original, None));
+
+        // The fixture declares easting first, so forcing XY changes nothing...
+        assert_eq!(
+            coordinate_bits(&parse_2021(&original, Some(CoordOrder::XY))),
+            auto
+        );
+        // ...and forcing YX reads every point mirrored.
+        let mirrored = coordinate_bits(&parse_2021(&original, Some(CoordOrder::YX)));
+        assert_eq!(mirrored[..2], with_x_and_y_exchanged(&auto)[..]);
+        assert_ne!(mirrored[2], auto[2]);
+
+        // A file whose declaration is wrong is what the override is for: the
+        // URN form over easting-first numbers reads right only when forced.
+        let misdeclared = original.replace(SRS_SHORT, SRS_URN);
+        assert_ne!(coordinate_bits(&parse_2021(&misdeclared, None)), auto);
+        assert_eq!(
+            coordinate_bits(&parse_2021(&misdeclared, Some(CoordOrder::XY))),
+            auto
+        );
+    }
+
+    /// The same rule in the 2012 parser, which used to hardcode northing
+    /// first: its fixture declares the URN form, and the short form flips it.
+    #[test]
+    fn test_2012_order_follows_srs_name_and_can_be_forced() {
+        let original = std::fs::read_to_string("fixtures/sample_model2012.xml").unwrap();
+        assert!(original.contains(SRS_URN));
+        let auto = coordinate_bits(&parse_2012(&original, None));
+        assert!(auto[0].iter().all(Option::is_some));
+
+        assert_eq!(
+            coordinate_bits(&parse_2012(&original, Some(CoordOrder::YX))),
+            auto
+        );
+        let mirrored = coordinate_bits(&parse_2012(&original, Some(CoordOrder::XY)));
+        assert_eq!(mirrored[..2], with_x_and_y_exchanged(&auto)[..]);
+
+        let short_form = exchange_gml_pos(&original.replace(SRS_URN, SRS_SHORT));
+        assert_eq!(coordinate_bits(&parse_2012(&short_form, None)), auto);
     }
 }

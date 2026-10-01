@@ -9,10 +9,12 @@ use quick_xml::events::Event;
 use crate::CoordOrder;
 use crate::common::CanonicalBuilders;
 use crate::common::EPOCH_DATE;
+use crate::common::coord_order_for_srs_name;
 use crate::common::get_attribute;
 use crate::common::option_append_value_or_null;
 use crate::common::parse_gml_pos;
 use crate::common::str_append_value_or_null;
+use crate::common::try_get_attribute;
 
 const ADDRESS_TAG: &[u8] = b"prg-ad:PRG_PunktAdresowy";
 const ADMINISTRATIVE_UNIT_TAG: &[u8] = b"prg-ad:PRG_JednostkaAdministracyjnaNazwa";
@@ -208,6 +210,9 @@ pub struct AddressParser2012<R: BufRead> {
     batch_size: usize,
     additional_info: HashMap<String, AdditionalInfo>,
     builders: CanonicalBuilders,
+    /// `Some` forces the order of every `<gml:pos>`; `None` follows each
+    /// point's own `srsName`.
+    coordinate_order: Option<CoordOrder>,
 }
 
 impl<R: BufRead> AddressParser2012<R> {
@@ -215,12 +220,14 @@ impl<R: BufRead> AddressParser2012<R> {
         reader: Reader<R>,
         batch_size: usize,
         additional_info: HashMap<String, AdditionalInfo>,
+        coordinate_order: Option<CoordOrder>,
     ) -> Self {
         Self {
             reader,
             batch_size,
             additional_info,
             builders: CanonicalBuilders::with_capacity(batch_size),
+            coordinate_order,
         }
     }
 
@@ -229,6 +236,8 @@ impl<R: BufRead> AddressParser2012<R> {
         let mut last_tag = Vec::new();
         let mut nested_tag = false; // informs if we're processing a nested tag
         let mut tag_ignore_text = false; // informs if we're processing a tag that won't have any text content
+        // order declared by the enclosing <gml:Point>; a <gml:pos> outside one gets the default
+        let mut declared_order = coord_order_for_srs_name(None);
         let mut admin_unit_counter: u8 = 0;
         // inside loop to process the content of the current address
         loop {
@@ -241,10 +250,16 @@ impl<R: BufRead> AddressParser2012<R> {
                         | b"bt:BT_Identyfikator"
                         | b"prg-ad:cyklZycia"
                         | b"bt:BT_CyklZyciaInfo"
-                        | b"prg-ad:pozycja"
-                        | b"gml:Point" => {
+                        | b"prg-ad:pozycja" => {
                             nested_tag = true;
                             tag_ignore_text = false;
+                        }
+                        b"gml:Point" => {
+                            nested_tag = true;
+                            tag_ignore_text = false;
+                            declared_order = coord_order_for_srs_name(
+                                try_get_attribute(e, b"srsName").as_deref(),
+                            );
                         }
                         b"prg-ad:komponent" => {
                             let attr = get_attribute(e, b"xlink:href");
@@ -387,7 +402,8 @@ impl<R: BufRead> AddressParser2012<R> {
                             self.builders.status.append_value(text_trimmed);
                         }
                         b"gml:pos" => {
-                            let coords = parse_gml_pos(text_trimmed, CoordOrder::YX)
+                            let order = self.coordinate_order.unwrap_or(declared_order);
+                            let coords = parse_gml_pos(text_trimmed, order)
                                 .expect("Could not parse coordinates.");
                             match coords {
                                 None => {
