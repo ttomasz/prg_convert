@@ -111,7 +111,6 @@ pub fn get_address_parser_2012_uncompressed(
     coordinate_order: Option<CoordOrder>,
 ) -> anyhow::Result<AddressParser2012<std::io::BufReader<File>>> {
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
-    println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     Ok(AddressParser2012::new(
@@ -134,7 +133,6 @@ pub fn get_address_parser_2012_zip<'a>(
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
     reader.config_mut().expand_empty_elements = true;
-    println!("Building dictionaries...");
     let dict = model2012::build_dictionaries(reader);
 
     let zip_file = archive
@@ -185,7 +183,6 @@ pub fn get_address_parser_2021_uncompressed(
     coordinate_order: Option<CoordOrder>,
 ) -> anyhow::Result<AddressParser2021<std::io::BufReader<File>>> {
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
-    println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
     let reader = get_xml_reader_from_uncompressed_file(file_path)?;
     Ok(AddressParser2021::new(
@@ -210,7 +207,6 @@ pub fn get_address_parser_2021_zip<'a>(
     let buf_reader = BufReader::new(zip_file);
     let mut reader = Reader::from_reader(buf_reader);
     reader.config_mut().expand_empty_elements = true;
-    println!("Building dictionaries...");
     let dict = model2021::build_dictionaries(reader);
 
     let zip_file = archive
